@@ -1,8 +1,11 @@
 package com.proxymed.suivi.entity;
 
+import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.StatutVisite;
 import com.proxymed.suivi.enums.TypeVisite;
+import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -12,6 +15,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -22,11 +26,15 @@ import lombok.Setter;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
  * Entite racine de la Fiche 2 (visite de suivi mensuel a domicile).
- * Ne porte pour l'instant que la section 1 (identification de la visite).
+ * Porte pour l'instant la section 1 (identification) et la section 3 (surveillance).
  * Les regles de gestion (numero de visite, roles des medecins, statut modifiable, etc.)
  * sont appliquees au niveau service, pas ici.
  */
@@ -84,6 +92,30 @@ public class VisiteSuivi {
     @Column(nullable = false)
     @Builder.Default
     private StatutVisite statut = StatutVisite.BROUILLON;
+
+    /**
+     * Grille des constantes (section 3.1). Les mesures sont creees et supprimees par
+     * ConstanteVisiteService ; cette collection ne sert qu'a les relire avec la visite.
+     */
+    @OneToMany(mappedBy = "visite")
+    @Builder.Default
+    private List<ConstanteVisite> constantes = new ArrayList<>();
+
+    @ElementCollection
+    @CollectionTable(name = "visite_signe_alerte_clinique", joinColumns = @JoinColumn(name = "visite_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "signe", nullable = false)
+    @Builder.Default
+    private Set<SigneAlerteClinique> signesAlerteCliniques = new HashSet<>();
+
+    @Column(name = "heure_appel_senior")
+    private LocalTime heureAppelSenior;
+
+    @Column(name = "heure_reponse_senior")
+    private LocalTime heureReponseSenior;
+
+    @Column(name = "decision_appel_senior", columnDefinition = "TEXT")
+    private String decisionAppelSenior;
 
     @Column(name = "date_creation", nullable = false)
     private Instant dateCreation;

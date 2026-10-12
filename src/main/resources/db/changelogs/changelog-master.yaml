@@ -11,3 +11,9 @@ databaseChangeLog:
   - include:
       file: db/changelogs/004-insert-donnees-test.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/005-create-constante-visite-table.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/006-add-surveillance-visite.sql
+      relativeToChangelogFile: false

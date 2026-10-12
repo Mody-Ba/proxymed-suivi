@@ -26,6 +26,7 @@ public class VisiteSuiviMapper {
 
     private final PatientMapper patientMapper;
     private final MedecinMapper medecinMapper;
+    private final ConstanteVisiteMapper constanteVisiteMapper;
 
     public VisiteSuiviModel toModel(UUID patientId, VisiteSuiviCreateRequest req) {
         return VisiteSuiviModel.builder()
@@ -53,6 +54,10 @@ public class VisiteSuiviMapper {
                 .contactSenior(req.contactSenior())
                 .contactSeniorJoignable(req.contactSeniorJoignable())
                 .typeVisite(req.typeVisite())
+                .signesAlerteCliniques(req.signesAlerteCliniques())
+                .heureAppelSenior(req.heureAppelSenior())
+                .heureReponseSenior(req.heureReponseSenior())
+                .decisionAppelSenior(req.decisionAppelSenior())
                 .build();
     }
 
@@ -71,6 +76,13 @@ public class VisiteSuiviMapper {
                 .contactSenior(model.contactSenior())
                 .contactSeniorJoignable(model.contactSeniorJoignable())
                 .typeVisite(model.typeVisite())
+                .alerteDeclenchee(Boolean.TRUE.equals(model.alerteDeclenchee()))
+                .alertes(constanteVisiteMapper.toAlerteResponses(model.alertes()))
+                .grilleConstantes(constanteVisiteMapper.toGrilleResponse(model.grilleConstantes()))
+                .signesAlerteCliniques(model.signesAlerteCliniques())
+                .heureAppelSenior(model.heureAppelSenior())
+                .heureReponseSenior(model.heureReponseSenior())
+                .decisionAppelSenior(model.decisionAppelSenior())
                 .dateCreation(model.dateCreation())
                 .dateMiseAJour(model.dateMiseAJour())
                 .build();

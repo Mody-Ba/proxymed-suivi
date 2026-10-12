@@ -1,11 +1,15 @@
 package com.proxymed.suivi.service;
 
+import com.proxymed.suivi.entity.ConstanteVisite;
 import com.proxymed.suivi.entity.Medecin;
 import com.proxymed.suivi.entity.Patient;
 import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.CreneauMesure;
 import com.proxymed.suivi.enums.RoleMedecin;
 import com.proxymed.suivi.enums.Sexe;
+import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.StatutVisite;
+import com.proxymed.suivi.enums.TypeConstante;
 import com.proxymed.suivi.enums.TypeVisite;
 import com.proxymed.suivi.exception.ConflitEtatException;
 import com.proxymed.suivi.exception.RegleGestionException;
@@ -13,6 +17,8 @@ import com.proxymed.suivi.exception.ResourceNotFoundException;
 import com.proxymed.suivi.repository.MedecinRepository;
 import com.proxymed.suivi.repository.PatientRepository;
 import com.proxymed.suivi.repository.VisiteSuiviRepository;
+import com.proxymed.suivi.service.model.AlerteModel;
+import com.proxymed.suivi.service.model.LigneGrilleConstantesModel;
 import com.proxymed.suivi.service.model.MedecinModel;
 import com.proxymed.suivi.service.model.PatientModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
@@ -22,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -68,7 +75,8 @@ class VisiteSuiviServiceTest {
                 new com.proxymed.suivi.service.mappers.VisiteSuiviMapper(
                         patientRepository, medecinRepository,
                         new com.proxymed.suivi.service.mappers.PatientMapper(),
-                        new com.proxymed.suivi.service.mappers.MedecinMapper());
+                        new com.proxymed.suivi.service.mappers.MedecinMapper(),
+                        new com.proxymed.suivi.service.mappers.ConstanteVisiteMapper(visiteSuiviRepository));
 
         visiteSuiviService = new VisiteSuiviServiceImpl(
                 visiteSuiviRepository, patientService, medecinService, visiteDbMapper);
@@ -256,6 +264,119 @@ class VisiteSuiviServiceTest {
                     .isInstanceOf(ConflitEtatException.class);
         }
         verify(visiteSuiviRepository, never()).save(any());
+    }
+
+    @Test
+    void findById_sansConstante_renvoieLaGrilleVideEtAucuneAlerte() {
+        VisiteSuivi visite = visiteBrouillon();
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.findById(visite.getId());
+
+        assertThat(resultat.alerteDeclenchee()).isFalse();
+        assertThat(resultat.alertes()).isEmpty();
+        assertThat(resultat.grilleConstantes()).extracting(LigneGrilleConstantesModel::type)
+                .containsExactly(TypeConstante.values());
+        assertThat(resultat.grilleConstantes()).allSatisfy(ligne -> assertThat(ligne.mesures()).isEmpty());
+    }
+
+    @Test
+    void findById_recalculeLesAlertesDesConstantes_etTrieLaGrilleParCreneau() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.getConstantes().add(constante(visite, TypeConstante.FC, CreneauMesure.H_PLUS_1, "130", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.FC, CreneauMesure.H0, "80", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.TA, CreneauMesure.H0, "190", "100"));
+        visite.getConstantes().add(constante(visite, TypeConstante.SPO2, CreneauMesure.H0, "97", null));
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.findById(visite.getId());
+
+        assertThat(resultat.alerteDeclenchee()).isTrue();
+        assertThat(resultat.alertes()).extracting(AlerteModel::constante, AlerteModel::creneau, AlerteModel::seuilFranchi)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(TypeConstante.TA, CreneauMesure.H0, "TA > 180/110 mmHg"),
+                        org.assertj.core.groups.Tuple.tuple(TypeConstante.FC, CreneauMesure.H_PLUS_1, "FC > 120 batt/min"));
+        assertThat(resultat.alertes().get(0).valeurDiastolique()).isEqualByComparingTo("100");
+
+        LigneGrilleConstantesModel ligneFc = resultat.grilleConstantes().get(1);
+        assertThat(ligneFc.type()).isEqualTo(TypeConstante.FC);
+        assertThat(ligneFc.mesures()).extracting(m -> m.creneau()).containsExactly(CreneauMesure.H0, CreneauMesure.H_PLUS_1);
+        assertThat(ligneFc.mesures()).extracting(m -> m.alerte()).containsExactly(false, true);
+    }
+
+    @Test
+    void findById_unSigneAlerteCliniqueCoche_declencheUneAlerte() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.getSignesAlerteCliniques().add(SigneAlerteClinique.DOULEUR_THORACIQUE);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.findById(visite.getId());
+
+        assertThat(resultat.alerteDeclenchee()).isTrue();
+        assertThat(resultat.alertes()).hasSize(1);
+        assertThat(resultat.alertes().get(0).signeClinique()).isEqualTo(SigneAlerteClinique.DOULEUR_THORACIQUE);
+        assertThat(resultat.alertes().get(0).constante()).isNull();
+        assertThat(resultat.alertes().get(0).seuilFranchi()).isEqualTo("Douleur thoracique");
+    }
+
+    @Test
+    void mettreAJour_remplaceLesSignesAlerteCliniques_etEnregistreLAppelDuSenior() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.getSignesAlerteCliniques().add(SigneAlerteClinique.DOULEUR_THORACIQUE);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .signesAlerteCliniques(List.of(SigneAlerteClinique.DETRESSE_RESPIRATOIRE))
+                .heureAppelSenior(LocalTime.of(9, 40))
+                .heureReponseSenior(LocalTime.of(9, 43))
+                .decisionAppelSenior("Oxygene et transfert EPS")
+                .build());
+
+        assertThat(resultat.signesAlerteCliniques()).containsExactly(SigneAlerteClinique.DETRESSE_RESPIRATOIRE);
+        assertThat(resultat.alerteDeclenchee()).isTrue();
+        assertThat(resultat.heureAppelSenior()).isEqualTo(LocalTime.of(9, 40));
+        assertThat(resultat.heureReponseSenior()).isEqualTo(LocalTime.of(9, 43));
+        assertThat(resultat.decisionAppelSenior()).isEqualTo("Oxygene et transfert EPS");
+    }
+
+    @Test
+    void mettreAJour_sansSignesDansLaRequete_conserveLesSignesCoches_etUneListeVideLesDecoche() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.getSignesAlerteCliniques().add(SigneAlerteClinique.DOULEUR_THORACIQUE);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel inchange = visiteSuiviService.mettreAJour(visite.getId(),
+                VisiteSuiviModel.builder().heureDepart(LocalTime.of(11, 0)).build());
+        assertThat(inchange.signesAlerteCliniques()).containsExactly(SigneAlerteClinique.DOULEUR_THORACIQUE);
+
+        VisiteSuiviModel decoche = visiteSuiviService.mettreAJour(visite.getId(),
+                VisiteSuiviModel.builder().signesAlerteCliniques(List.of()).build());
+        assertThat(decoche.signesAlerteCliniques()).isEmpty();
+        assertThat(decoche.alerteDeclenchee()).isFalse();
+    }
+
+    @Test
+    void verifierModifiable_accepteUnBrouillon_etRejetteUneFicheTerminee() {
+        VisiteSuivi brouillon = visiteBrouillon();
+        when(visiteSuiviRepository.findById(brouillon.getId())).thenReturn(Optional.of(brouillon));
+        visiteSuiviService.verifierModifiable(brouillon.getId());
+
+        VisiteSuivi terminee = visiteBrouillon();
+        terminee.setStatut(StatutVisite.TERMINEE);
+        when(visiteSuiviRepository.findById(terminee.getId())).thenReturn(Optional.of(terminee));
+        assertThatThrownBy(() -> visiteSuiviService.verifierModifiable(terminee.getId()))
+                .isInstanceOf(ConflitEtatException.class);
+    }
+
+    private ConstanteVisite constante(VisiteSuivi visite, TypeConstante type, CreneauMesure creneau,
+                                      String valeur, String diastolique) {
+        return ConstanteVisite.builder()
+                .visite(visite)
+                .type(type)
+                .creneau(creneau)
+                .valeur(new BigDecimal(valeur))
+                .valeurDiastolique(diastolique != null ? new BigDecimal(diastolique) : null)
+                .build();
     }
 
     private VisiteSuiviModel.VisiteSuiviModelBuilder intentionCreation(Long medecinJuniorId, Long medecinSeniorId) {
