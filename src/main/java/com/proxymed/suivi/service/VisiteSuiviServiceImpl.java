@@ -1,0 +1,157 @@
+package com.proxymed.suivi.service;
+
+import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.RoleMedecin;
+import com.proxymed.suivi.enums.StatutVisite;
+import com.proxymed.suivi.exception.ConflitEtatException;
+import com.proxymed.suivi.exception.RegleGestionException;
+import com.proxymed.suivi.exception.ResourceNotFoundException;
+import com.proxymed.suivi.repository.VisiteSuiviRepository;
+import com.proxymed.suivi.service.mappers.VisiteSuiviMapper;
+import com.proxymed.suivi.service.model.MedecinModel;
+import com.proxymed.suivi.service.model.VisiteSuiviModel;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalTime;
+import java.time.temporal.ChronoUnit;
+import java.util.List;
+import java.util.UUID;
+
+/**
+ * Travaille avec VisiteSuiviModel comme type de travail. La seule entite JPA visible dans
+ * cette classe est VisiteSuivi (l'aggregat propre a ce service) : chargee par
+ * VisiteSuiviRepository, convertie en Model immediatement, et reconvertie en Entity
+ * (via visiteSuiviMapper) juste avant repository.save(...).
+ * Les entites des autres aggregats (Patient, Medecin) ne sont JAMAIS manipulees ici : leur
+ * existence et les regles metier associees (role du medecin) sont verifiees via les Model
+ * renvoyes par PatientService/MedecinService, et le rattachement JPA (traduction d'un id en
+ * reference) est delegue au mapper DB.
+ */
+@Service
+@RequiredArgsConstructor
+@Transactional
+public class VisiteSuiviServiceImpl implements VisiteSuiviService {
+
+    private final VisiteSuiviRepository visiteSuiviRepository;
+    private final PatientService patientService;
+    private final MedecinService medecinService;
+    private final VisiteSuiviMapper visiteSuiviMapper;
+
+    @Override
+    public VisiteSuiviModel findById(UUID id) {
+        return toModel(getEntityById(id));
+    }
+
+    @Override
+    public List<VisiteSuiviModel> findByPatient(UUID patientId) {
+        patientService.findById(patientId);
+        return visiteSuiviRepository.findByPatientIdOrderByNumeroVisiteDesc(patientId)
+                .stream().map(this::toModel).toList();
+    }
+
+    @Override
+    public VisiteSuiviModel creerBrouillon(VisiteSuiviModel intention) {
+        UUID patientId = intention.patient().id();
+        patientService.findById(patientId);
+        verifierRole(intention.medecinJunior().id(), RoleMedecin.JUNIOR);
+        verifierRole(intention.medecinSenior().id(), RoleMedecin.SENIOR);
+
+        Instant maintenant = Instant.now();
+        VisiteSuiviModel avecDefauts = intention.toBuilder()
+                .numeroVisite(prochainNumeroVisite(patientId))
+                .statut(StatutVisite.BROUILLON)
+                .dateVisite(intention.dateVisite() != null ? intention.dateVisite() : LocalDate.now())
+                .heureArrivee(intention.heureArrivee() != null
+                        ? intention.heureArrivee() : LocalTime.now().truncatedTo(ChronoUnit.MINUTES))
+                .dateCreation(maintenant)
+                .dateMiseAJour(maintenant)
+                .build();
+        VisiteSuivi entity = visiteSuiviMapper.toNewEntity(avecDefauts);
+        return toModel(visiteSuiviRepository.save(entity));
+    }
+
+    @Override
+    public VisiteSuiviModel mettreAJour(UUID id, VisiteSuiviModel intention) {
+        VisiteSuivi entity = getEntityById(id);
+        VisiteSuiviModel courant = toModel(entity);
+        verifierModifiable(courant);
+
+        if (intention.medecinJunior() != null) {
+            MedecinModel junior = verifierRole(intention.medecinJunior().id(), RoleMedecin.JUNIOR);
+            visiteSuiviMapper.appliquerMedecinJunior(entity, junior.id());
+        }
+        if (intention.medecinSenior() != null) {
+            MedecinModel senior = verifierRole(intention.medecinSenior().id(), RoleMedecin.SENIOR);
+            visiteSuiviMapper.appliquerMedecinSenior(entity, senior.id());
+        }
+
+        VisiteSuiviModel fusionne = fusionnerChampsScalaires(courant, intention).toBuilder()
+                .dateMiseAJour(Instant.now())
+                .build();
+        visiteSuiviMapper.applyScalarFieldsToEntity(entity, fusionne);
+        return toModel(visiteSuiviRepository.save(entity));
+    }
+
+    /**
+     * Seul point d'acces a l'entite JPA dans ce service : prive, jamais expose aux
+     * controllers ni aux autres services.
+     */
+    private VisiteSuivi getEntityById(UUID id) {
+        return visiteSuiviRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Visite introuvable : " + id));
+    }
+
+    private VisiteSuiviModel toModel(VisiteSuivi entity) {
+        VisiteSuiviModel model = visiteSuiviMapper.toModel(entity);
+        return model.toBuilder().patient(patientService.completerAge(model.patient())).build();
+    }
+
+    /**
+     * Regle 1 : numero de visite = nombre de visites deja enregistrees pour ce patient + 1.
+     */
+    private int prochainNumeroVisite(UUID patientId) {
+        return Math.toIntExact(visiteSuiviRepository.countByPatientId(patientId)) + 1;
+    }
+
+    /**
+     * Regle 3 : le medecin doit exister (404 via MedecinService) et avoir le role attendu.
+     */
+    private MedecinModel verifierRole(Long medecinId, RoleMedecin roleAttendu) {
+        MedecinModel medecin = medecinService.findById(medecinId);
+        if (medecin.role() != roleAttendu) {
+            throw new RegleGestionException("Le medecin " + roleAttendu.name().toLowerCase()
+                    + " doit avoir le role " + roleAttendu + " (medecin " + medecin.id() + ")");
+        }
+        return medecin;
+    }
+
+    /**
+     * Regle 4 : modification possible seulement en BROUILLON.
+     */
+    private void verifierModifiable(VisiteSuiviModel model) {
+        if (model.statut() != StatutVisite.BROUILLON) {
+            throw new ConflitEtatException(
+                    "La fiche n'est plus modifiable (statut actuel : " + model.statut() + ")");
+        }
+    }
+
+    private VisiteSuiviModel fusionnerChampsScalaires(VisiteSuiviModel courant, VisiteSuiviModel maj) {
+        return courant.toBuilder()
+                .dateVisite(coalesce(maj.dateVisite(), courant.dateVisite()))
+                .heureArrivee(coalesce(maj.heureArrivee(), courant.heureArrivee()))
+                .heureDepart(coalesce(maj.heureDepart(), courant.heureDepart()))
+                .adresseVisite(coalesce(maj.adresseVisite(), courant.adresseVisite()))
+                .contactSenior(coalesce(maj.contactSenior(), courant.contactSenior()))
+                .contactSeniorJoignable(coalesce(maj.contactSeniorJoignable(), courant.contactSeniorJoignable()))
+                .typeVisite(coalesce(maj.typeVisite(), courant.typeVisite()))
+                .build();
+    }
+
+    private static <T> T coalesce(T nouvelle, T actuelle) {
+        return nouvelle != null ? nouvelle : actuelle;
+    }
+}

@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: db/changelogs/001-create-medecin-table.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/002-create-patient-table.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/003-create-visite-suivi-table.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/004-insert-donnees-test.sql
+      relativeToChangelogFile: false
