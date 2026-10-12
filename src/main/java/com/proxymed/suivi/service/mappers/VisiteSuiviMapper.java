@@ -1,11 +1,14 @@
 package com.proxymed.suivi.service.mappers;
 
 import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.repository.MedecinRepository;
 import com.proxymed.suivi.repository.PatientRepository;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * Mapper DB : convertit uniquement entre VisiteSuiviModel et l'entite JPA VisiteSuivi.
@@ -24,6 +27,7 @@ public class VisiteSuiviMapper {
     private final MedecinRepository medecinRepository;
     private final PatientMapper patientMapper;
     private final MedecinMapper medecinMapper;
+    private final ConstanteVisiteMapper constanteVisiteMapper;
 
     public VisiteSuivi toNewEntity(VisiteSuiviModel model) {
         return VisiteSuivi.builder()
@@ -47,8 +51,9 @@ public class VisiteSuiviMapper {
     /**
      * Applique les champs scalaires (hors relations) du modele sur une entite managee
      * existante (mutation en place, necessaire pour qu'Hibernate suive les changements).
-     * Les medecins se changent via appliquerMedecinJunior/appliquerMedecinSenior, pour ne
-     * les toucher que quand le service decide explicitement de les modifier.
+     * Les medecins et les signes d'alerte cliniques se changent via appliquerMedecinJunior/
+     * appliquerMedecinSenior/appliquerSignesAlerteCliniques, pour ne les toucher que quand
+     * le service decide explicitement de les modifier.
      * Le patient, le numero de visite et la date de creation ne changent jamais.
      */
     public void applyScalarFieldsToEntity(VisiteSuivi entity, VisiteSuiviModel model) {
@@ -59,6 +64,9 @@ public class VisiteSuiviMapper {
         entity.setContactSenior(model.contactSenior());
         entity.setContactSeniorJoignable(model.contactSeniorJoignable());
         entity.setTypeVisite(model.typeVisite());
+        entity.setHeureAppelSenior(model.heureAppelSenior());
+        entity.setHeureReponseSenior(model.heureReponseSenior());
+        entity.setDecisionAppelSenior(model.decisionAppelSenior());
         entity.setStatut(model.statut());
         entity.setDateMiseAJour(model.dateMiseAJour());
     }
@@ -69,6 +77,14 @@ public class VisiteSuiviMapper {
 
     public void appliquerMedecinSenior(VisiteSuivi entity, Long medecinId) {
         entity.setMedecinSenior(medecinRepository.getReferenceById(medecinId));
+    }
+
+    /**
+     * Remplace toute la liste des signes d'alerte cliniques coches.
+     */
+    public void appliquerSignesAlerteCliniques(VisiteSuivi entity, List<SigneAlerteClinique> signes) {
+        entity.getSignesAlerteCliniques().clear();
+        entity.getSignesAlerteCliniques().addAll(signes);
     }
 
     public VisiteSuiviModel toModel(VisiteSuivi entity) {
@@ -86,6 +102,11 @@ public class VisiteSuiviMapper {
                 .contactSeniorJoignable(entity.getContactSeniorJoignable())
                 .typeVisite(entity.getTypeVisite())
                 .statut(entity.getStatut())
+                .constantes(constanteVisiteMapper.toModelList(entity.getConstantes()))
+                .signesAlerteCliniques(entity.getSignesAlerteCliniques().stream().sorted().toList())
+                .heureAppelSenior(entity.getHeureAppelSenior())
+                .heureReponseSenior(entity.getHeureReponseSenior())
+                .decisionAppelSenior(entity.getDecisionAppelSenior())
                 .dateCreation(entity.getDateCreation())
                 .dateMiseAJour(entity.getDateMiseAJour())
                 .build();

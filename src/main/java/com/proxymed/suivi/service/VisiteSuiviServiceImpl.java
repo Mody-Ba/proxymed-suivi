@@ -2,12 +2,17 @@ package com.proxymed.suivi.service;
 
 import com.proxymed.suivi.entity.VisiteSuivi;
 import com.proxymed.suivi.enums.RoleMedecin;
+import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.StatutVisite;
+import com.proxymed.suivi.enums.TypeConstante;
 import com.proxymed.suivi.exception.ConflitEtatException;
 import com.proxymed.suivi.exception.RegleGestionException;
 import com.proxymed.suivi.exception.ResourceNotFoundException;
 import com.proxymed.suivi.repository.VisiteSuiviRepository;
 import com.proxymed.suivi.service.mappers.VisiteSuiviMapper;
+import com.proxymed.suivi.service.model.AlerteModel;
+import com.proxymed.suivi.service.model.ConstanteVisiteModel;
+import com.proxymed.suivi.service.model.LigneGrilleConstantesModel;
 import com.proxymed.suivi.service.model.MedecinModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +23,9 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
 
@@ -88,12 +96,20 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
             MedecinModel senior = verifierRole(intention.medecinSenior().id(), RoleMedecin.SENIOR);
             visiteSuiviMapper.appliquerMedecinSenior(entity, senior.id());
         }
+        if (intention.signesAlerteCliniques() != null) {
+            visiteSuiviMapper.appliquerSignesAlerteCliniques(entity, intention.signesAlerteCliniques());
+        }
 
         VisiteSuiviModel fusionne = fusionnerChampsScalaires(courant, intention).toBuilder()
                 .dateMiseAJour(Instant.now())
                 .build();
         visiteSuiviMapper.applyScalarFieldsToEntity(entity, fusionne);
         return toModel(visiteSuiviRepository.save(entity));
+    }
+
+    @Override
+    public void verifierModifiable(UUID id) {
+        verifierModifiable(findById(id));
     }
 
     /**
@@ -107,7 +123,54 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
 
     private VisiteSuiviModel toModel(VisiteSuivi entity) {
         VisiteSuiviModel model = visiteSuiviMapper.toModel(entity);
-        return model.toBuilder().patient(patientService.completerAge(model.patient())).build();
+        List<ConstanteVisiteModel> constantes = model.constantes().stream().map(SeuilsAlerte::appliquer).toList();
+        List<AlerteModel> alertes = calculerAlertes(constantes, model.signesAlerteCliniques());
+        return model.toBuilder()
+                .patient(patientService.completerAge(model.patient()))
+                .constantes(constantes)
+                .grilleConstantes(construireGrille(constantes))
+                .alerteDeclenchee(!alertes.isEmpty())
+                .alertes(alertes)
+                .build();
+    }
+
+    /**
+     * Regle 5 : alertes recalculees a chaque lecture, jamais saisies ni stockees. Une
+     * constante hors seuil ou un signe d'alerte clinique coche declenche une alerte.
+     */
+    private List<AlerteModel> calculerAlertes(List<ConstanteVisiteModel> constantes, List<SigneAlerteClinique> signes) {
+        List<AlerteModel> alertes = new ArrayList<>();
+        constantes.stream()
+                .filter(c -> Boolean.TRUE.equals(c.alerte()))
+                .sorted(Comparator.comparing(ConstanteVisiteModel::creneau).thenComparing(ConstanteVisiteModel::type))
+                .forEach(c -> alertes.add(AlerteModel.builder()
+                        .constante(c.type())
+                        .creneau(c.creneau())
+                        .valeur(c.valeur())
+                        .valeurDiastolique(c.valeurDiastolique())
+                        .seuilFranchi(c.seuilFranchi())
+                        .build()));
+        signes.forEach(signe -> alertes.add(AlerteModel.builder()
+                .signeClinique(signe)
+                .seuilFranchi(signe.getLibelle())
+                .build()));
+        return alertes;
+    }
+
+    /**
+     * Grille de la section 3.1 : les 8 constantes dans l'ordre de la fiche (meme sans mesure),
+     * chacune avec ses mesures triees par creneau (H0 a H+4).
+     */
+    private List<LigneGrilleConstantesModel> construireGrille(List<ConstanteVisiteModel> constantes) {
+        return Arrays.stream(TypeConstante.values())
+                .map(type -> LigneGrilleConstantesModel.builder()
+                        .type(type)
+                        .mesures(constantes.stream()
+                                .filter(c -> c.type() == type)
+                                .sorted(Comparator.comparing(ConstanteVisiteModel::creneau))
+                                .toList())
+                        .build())
+                .toList();
     }
 
     /**
@@ -148,6 +211,9 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
                 .contactSenior(coalesce(maj.contactSenior(), courant.contactSenior()))
                 .contactSeniorJoignable(coalesce(maj.contactSeniorJoignable(), courant.contactSeniorJoignable()))
                 .typeVisite(coalesce(maj.typeVisite(), courant.typeVisite()))
+                .heureAppelSenior(coalesce(maj.heureAppelSenior(), courant.heureAppelSenior()))
+                .heureReponseSenior(coalesce(maj.heureReponseSenior(), courant.heureReponseSenior()))
+                .decisionAppelSenior(coalesce(maj.decisionAppelSenior(), courant.decisionAppelSenior()))
                 .build();
     }
 

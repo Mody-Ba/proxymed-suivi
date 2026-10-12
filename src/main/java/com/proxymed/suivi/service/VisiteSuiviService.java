@@ -23,4 +23,10 @@ public interface VisiteSuiviService {
      * Mise a jour partielle : seuls les champs non nuls de l'intention sont appliques.
      */
     VisiteSuiviModel mettreAJour(UUID id, VisiteSuiviModel intention);
+
+    /**
+     * Verifie que la visite existe (404) et est encore en BROUILLON (409). Sert aux services
+     * des elements rattaches a la visite (constantes, etc.) avant toute modification.
+     */
+    void verifierModifiable(UUID id);
 }
