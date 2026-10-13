@@ -26,7 +26,7 @@ public interface VisiteSuiviService {
 
     /**
      * Verifie que la visite existe (404) et est encore en BROUILLON (409). Sert aux services
-     * des elements rattaches a la visite (constantes, etc.) avant toute modification.
+     * des elements rattaches a la visite (constantes, traitements) avant toute modification.
      */
     void verifierModifiable(UUID id);
 }

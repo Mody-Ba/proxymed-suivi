@@ -3,12 +3,22 @@ package com.proxymed.suivi.service;
 import com.proxymed.suivi.entity.ConstanteVisite;
 import com.proxymed.suivi.entity.Medecin;
 import com.proxymed.suivi.entity.Patient;
+import com.proxymed.suivi.entity.TraitementVisite;
 import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.ComprehensionPatient;
 import com.proxymed.suivi.enums.CreneauMesure;
+import com.proxymed.suivi.enums.DecisionVisite;
+import com.proxymed.suivi.enums.EtatGeneral;
+import com.proxymed.suivi.enums.EvenementIntercurrent;
+import com.proxymed.suivi.enums.MoyenTransmission;
+import com.proxymed.suivi.enums.ObservanceTraitement;
 import com.proxymed.suivi.enums.RoleMedecin;
 import com.proxymed.suivi.enums.Sexe;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
+import com.proxymed.suivi.enums.SituationSociale;
+import com.proxymed.suivi.enums.StatutPlanPrevention;
 import com.proxymed.suivi.enums.StatutVisite;
+import com.proxymed.suivi.enums.ThemeEducation;
 import com.proxymed.suivi.enums.TypeConstante;
 import com.proxymed.suivi.enums.TypeVisite;
 import com.proxymed.suivi.exception.ConflitEtatException;
@@ -21,6 +31,7 @@ import com.proxymed.suivi.service.model.AlerteModel;
 import com.proxymed.suivi.service.model.LigneGrilleConstantesModel;
 import com.proxymed.suivi.service.model.MedecinModel;
 import com.proxymed.suivi.service.model.PatientModel;
+import com.proxymed.suivi.service.model.TraitementVisiteModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,6 +42,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.List;
 import java.util.Optional;
@@ -76,7 +88,8 @@ class VisiteSuiviServiceTest {
                         patientRepository, medecinRepository,
                         new com.proxymed.suivi.service.mappers.PatientMapper(),
                         new com.proxymed.suivi.service.mappers.MedecinMapper(),
-                        new com.proxymed.suivi.service.mappers.ConstanteVisiteMapper(visiteSuiviRepository));
+                        new com.proxymed.suivi.service.mappers.ConstanteVisiteMapper(visiteSuiviRepository),
+                        new com.proxymed.suivi.service.mappers.TraitementVisiteMapper(visiteSuiviRepository));
 
         visiteSuiviService = new VisiteSuiviServiceImpl(
                 visiteSuiviRepository, patientService, medecinService, visiteDbMapper);
@@ -353,6 +366,117 @@ class VisiteSuiviServiceTest {
                 VisiteSuiviModel.builder().signesAlerteCliniques(List.of()).build());
         assertThat(decoche.signesAlerteCliniques()).isEmpty();
         assertThat(decoche.alerteDeclenchee()).isFalse();
+    }
+
+    @Test
+    void mettreAJour_enregistreLesSections2A8_sansToucherAuxChampsNonFournis() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.setPlaintePrincipale("Cephalees depuis 3 jours");
+        visite.setSituationSociale(SituationSociale.STABLE);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .etatGeneral(EtatGeneral.ALTERE)
+                .etatGeneralPrecision("Asthenie marquee")
+                .examenCardiovasculaire("Pouls regulier, pas d'OMI")
+                .observanceTraitement(ObservanceTraitement.PARTIELLE)
+                .raisonsNonObservance("Rupture de stock")
+                .comprehensionPatient(ComprehensionPatient.A_REEXPLIQUER)
+                .statutPlanPrevention(StatutPlanPrevention.A_REVISER_PAR_SENIOR)
+                .signalementDass(true)
+                .heureContactDass(LocalTime.of(10, 30))
+                .decision(DecisionVisite.SUIVI_RENFORCE)
+                .resumeClinique("HTA mal equilibree")
+                .dateEnvoiCompteRendu(LocalDateTime.of(2026, 10, 5, 14, 0))
+                .moyenTransmission(MoyenTransmission.WHATSAPP_PRO)
+                .prochaineVisiteDate(LocalDate.of(2026, 10, 19))
+                .build());
+
+        assertThat(resultat.etatGeneral()).isEqualTo(EtatGeneral.ALTERE);
+        assertThat(resultat.etatGeneralPrecision()).isEqualTo("Asthenie marquee");
+        assertThat(resultat.examenCardiovasculaire()).isEqualTo("Pouls regulier, pas d'OMI");
+        assertThat(resultat.observanceTraitement()).isEqualTo(ObservanceTraitement.PARTIELLE);
+        assertThat(resultat.raisonsNonObservance()).isEqualTo("Rupture de stock");
+        assertThat(resultat.comprehensionPatient()).isEqualTo(ComprehensionPatient.A_REEXPLIQUER);
+        assertThat(resultat.statutPlanPrevention()).isEqualTo(StatutPlanPrevention.A_REVISER_PAR_SENIOR);
+        assertThat(resultat.signalementDass()).isTrue();
+        assertThat(resultat.heureContactDass()).isEqualTo(LocalTime.of(10, 30));
+        assertThat(resultat.decision()).isEqualTo(DecisionVisite.SUIVI_RENFORCE);
+        assertThat(resultat.resumeClinique()).isEqualTo("HTA mal equilibree");
+        assertThat(resultat.dateEnvoiCompteRendu()).isEqualTo(LocalDateTime.of(2026, 10, 5, 14, 0));
+        assertThat(resultat.moyenTransmission()).isEqualTo(MoyenTransmission.WHATSAPP_PRO);
+        assertThat(resultat.prochaineVisiteDate()).isEqualTo(LocalDate.of(2026, 10, 19));
+        // Champs non fournis : inchanges
+        assertThat(resultat.plaintePrincipale()).isEqualTo("Cephalees depuis 3 jours");
+        assertThat(resultat.situationSociale()).isEqualTo(SituationSociale.STABLE);
+        assertThat(resultat.examenRespiratoire()).isNull();
+    }
+
+    @Test
+    void mettreAJour_remplaceLesEvenementsEtLesThemes_etLesConserveSIlsSontAbsents() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.getEvenementsIntercurrents().add(EvenementIntercurrent.AUCUN);
+        visite.getThemesAbordes().add(ThemeEducation.HYGIENE_PREVENTION);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .evenementsIntercurrents(List.of(EvenementIntercurrent.NON_OBSERVANCE, EvenementIntercurrent.CHUTE_ACCIDENT))
+                .evenementsPrecision("Chute dans la cour")
+                .build());
+
+        // Listes renvoyees dans l'ordre de la fiche, quel que soit l'ordre d'envoi.
+        assertThat(resultat.evenementsIntercurrents())
+                .containsExactly(EvenementIntercurrent.CHUTE_ACCIDENT, EvenementIntercurrent.NON_OBSERVANCE);
+        assertThat(resultat.evenementsPrecision()).isEqualTo("Chute dans la cour");
+        assertThat(resultat.themesAbordes()).containsExactly(ThemeEducation.HYGIENE_PREVENTION);
+
+        VisiteSuiviModel decoche = visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .themesAbordes(List.of())
+                .build());
+        assertThat(decoche.themesAbordes()).isEmpty();
+        assertThat(decoche.evenementsIntercurrents()).hasSize(2);
+    }
+
+    @Test
+    void mettreAJour_rejette_siAucunEstCocheAvecUnAutreEvenement() {
+        VisiteSuivi visite = visiteBrouillon();
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        assertThatThrownBy(() -> visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .evenementsIntercurrents(List.of(EvenementIntercurrent.AUCUN, EvenementIntercurrent.HOSPITALISATION))
+                .build()))
+                .isInstanceOf(RegleGestionException.class)
+                .hasMessageContaining("AUCUN");
+        assertThat(visite.getEvenementsIntercurrents()).isEmpty();
+        verify(visiteSuiviRepository, never()).save(any());
+
+        VisiteSuiviModel seul = visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .evenementsIntercurrents(List.of(EvenementIntercurrent.AUCUN))
+                .build());
+        assertThat(seul.evenementsIntercurrents()).containsExactly(EvenementIntercurrent.AUCUN);
+    }
+
+    @Test
+    void etatGeneralUrgenceOuUrgenceSociale_neDeclenchePasDAlerte() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.setEtatGeneral(EtatGeneral.URGENCE_APPEL_SENIOR);
+        visite.setSituationSociale(SituationSociale.URGENCE_SOCIALE);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        assertThat(visiteSuiviService.findById(visite.getId()).alerteDeclenchee()).isFalse();
+    }
+
+    @Test
+    void findById_renvoieLesTraitementsDansLOrdreDeSaisie() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.getTraitements().add(TraitementVisite.builder().id(12L).visite(visite).medicament("Metformine").build());
+        visite.getTraitements().add(TraitementVisite.builder().id(5L).visite(visite).medicament("Amlodipine").build());
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.findById(visite.getId());
+
+        assertThat(resultat.traitements()).extracting(TraitementVisiteModel::medicament)
+                .containsExactly("Amlodipine", "Metformine");
     }
 
     @Test

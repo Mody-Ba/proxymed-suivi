@@ -17,3 +17,9 @@ databaseChangeLog:
   - include:
       file: db/changelogs/006-add-surveillance-visite.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/007-add-sections-visite.sql
+      relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/008-create-traitement-visite-table.sql
+      relativeToChangelogFile: false
