@@ -8,9 +8,17 @@ import com.proxymed.suivi.service.model.VisiteSuiviCreateRequest;
 import com.proxymed.suivi.service.model.VisiteSuiviResponse;
 import com.proxymed.suivi.service.model.VisiteSuiviSummaryResponse;
 import com.proxymed.suivi.service.model.VisiteSuiviUpdateRequest;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -80,6 +88,22 @@ public class VisiteSuiviController {
     @PostMapping("/visites/{id}/signature-patient")
     public VisiteSuiviResponse signerPatient(@PathVariable UUID id, @Valid @RequestBody SignaturePatientRequest request) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.signerPatient(id, request.signataire()));
+    }
+
+    /**
+     * PDF de la fiche avec son QR code, en telechargement direct.
+     */
+    @ApiResponse(responseCode = "200", description = "Fiche de visite de suivi au format PDF",
+            content = @Content(mediaType = MediaType.APPLICATION_PDF_VALUE,
+                    schema = @Schema(type = "string", format = "binary")))
+    @GetMapping(value = "/visites/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
+    public ResponseEntity<Resource> telechargerPdf(@PathVariable UUID id) {
+        Resource pdf = visiteSuiviService.genererPdf(id);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION, ContentDisposition.attachment()
+                        .filename("fiche-visite-" + id + ".pdf").build().toString())
+                .body(pdf);
     }
 
     @PutMapping("/visites/{id}")

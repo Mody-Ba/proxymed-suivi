@@ -19,6 +19,7 @@ import com.proxymed.suivi.service.model.MedecinModel;
 import com.proxymed.suivi.service.model.TraitementVisiteModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import lombok.RequiredArgsConstructor;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -59,6 +60,7 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
     private final PatientService patientService;
     private final MedecinService medecinService;
     private final VisiteSuiviMapper visiteSuiviMapper;
+    private final PdfGenerationService pdfGenerationService;
 
     @Override
     public VisiteSuiviModel findById(UUID id) {
@@ -189,6 +191,11 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
     public List<VisiteSuiviModel> findEnAttenteVisa() {
         return visiteSuiviRepository.findByStatutOrderByDateSignatureJuniorAsc(StatutVisite.TERMINEE)
                 .stream().map(this::toModel).toList();
+    }
+
+    @Override
+    public Resource genererPdf(UUID id) {
+        return pdfGenerationService.genererFicheVisite(findById(id));
     }
 
     @Override
