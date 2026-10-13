@@ -6,6 +6,7 @@ import com.proxymed.suivi.enums.EtatGeneral;
 import com.proxymed.suivi.enums.EvenementIntercurrent;
 import com.proxymed.suivi.enums.MoyenTransmission;
 import com.proxymed.suivi.enums.ObservanceTraitement;
+import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.SituationSociale;
 import com.proxymed.suivi.enums.StatutPlanPrevention;
@@ -44,7 +45,7 @@ import java.util.UUID;
 
 /**
  * Entite racine de la Fiche 2 (visite de suivi mensuel a domicile).
- * Porte les sections 1 a 8 ; la section 9 (signatures) arrive avec le cycle de vie.
+ * Porte les 9 sections de la fiche.
  * Les regles de gestion (numero de visite, roles des medecins, statut modifiable, etc.)
  * sont appliquees au niveau service, pas ici.
  */
@@ -229,6 +230,26 @@ public class VisiteSuivi {
 
     @Column(name = "prochaine_visite_date")
     private LocalDate prochaineVisiteDate;
+
+    // Section 9 : signatures et validation
+    @Column(name = "date_signature_junior")
+    private Instant dateSignatureJunior;
+
+    @Column(name = "date_visa_senior")
+    private Instant dateVisaSenior;
+
+    @Column(name = "date_signature_patient")
+    private Instant dateSignaturePatient;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "signataire_patient")
+    private SignatairePatient signatairePatient;
+
+    @Column(name = "date_saisie_dmi")
+    private LocalDate dateSaisieDmi;
+
+    @Column(name = "saisie_dmi_par")
+    private String saisieDmiPar;
 
     @Column(name = "date_creation", nullable = false)
     private Instant dateCreation;

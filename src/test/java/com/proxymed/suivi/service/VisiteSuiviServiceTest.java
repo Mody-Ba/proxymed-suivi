@@ -14,6 +14,7 @@ import com.proxymed.suivi.enums.MoyenTransmission;
 import com.proxymed.suivi.enums.ObservanceTraitement;
 import com.proxymed.suivi.enums.RoleMedecin;
 import com.proxymed.suivi.enums.Sexe;
+import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.SituationSociale;
 import com.proxymed.suivi.enums.StatutPlanPrevention;
@@ -40,6 +41,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -480,6 +482,193 @@ class VisiteSuiviServiceTest {
     }
 
     @Test
+    void terminer_passeLaFicheCompleteEnTerminee_etEnregistreLaSignatureDuJunior() {
+        VisiteSuivi visite = visiteComplete();
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.terminer(visite.getId());
+
+        assertThat(resultat.statut()).isEqualTo(StatutVisite.TERMINEE);
+        assertThat(resultat.dateSignatureJunior()).isNotNull();
+        assertThat(resultat.dateVisaSenior()).isNull();
+        assertThat(resultat.echeanceVisa()).isEqualTo(resultat.dateSignatureJunior().plus(VisiteSuiviServiceImpl.DELAI_VISA));
+        assertThat(resultat.visaEnRetard()).isFalse();
+        assertThat(visite.getStatut()).isEqualTo(StatutVisite.TERMINEE);
+    }
+
+    @Test
+    void terminer_rejette_etListeTousLesManquements() {
+        VisiteSuivi visite = visiteBrouillon();
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        assertThatThrownBy(() -> visiteSuiviService.terminer(visite.getId()))
+                .isInstanceOfSatisfying(RegleGestionException.class, ex -> {
+                    assertThat(ex.getMessage()).contains("9 element(s)");
+                    assertThat(ex.getDetails()).hasSize(9)
+                            .anyMatch(d -> d.startsWith("heureDepart"))
+                            .anyMatch(d -> d.startsWith("constantes"))
+                            .anyMatch(d -> d.startsWith("resumeClinique"));
+                });
+        assertThat(visite.getStatut()).isEqualTo(StatutVisite.BROUILLON);
+        verify(visiteSuiviRepository, never()).save(any());
+    }
+
+    @Test
+    void terminer_avecAlerte_exigeLAppelDuSenior() {
+        VisiteSuivi visite = visiteComplete();
+        visite.getSignesAlerteCliniques().add(SigneAlerteClinique.DOULEUR_THORACIQUE);
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        assertThatThrownBy(() -> visiteSuiviService.terminer(visite.getId()))
+                .isInstanceOfSatisfying(RegleGestionException.class, ex -> assertThat(ex.getDetails())
+                        .extracting(d -> d.substring(0, d.indexOf(" :")))
+                        .containsExactly("heureAppelSenior", "decisionAppelSenior"));
+
+        visite.setHeureAppelSenior(LocalTime.of(9, 40));
+        visite.setDecisionAppelSenior("Transfert EPS");
+        assertThat(visiteSuiviService.terminer(visite.getId()).statut()).isEqualTo(StatutVisite.TERMINEE);
+    }
+
+    @Test
+    void terminer_rejette_siLaFicheNEstPlusEnBrouillon() {
+        for (StatutVisite statut : List.of(StatutVisite.TERMINEE, StatutVisite.VISEE)) {
+            VisiteSuivi visite = visiteComplete();
+            visite.setStatut(statut);
+            when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+            assertThatThrownBy(() -> visiteSuiviService.terminer(visite.getId()))
+                    .isInstanceOf(ConflitEtatException.class);
+        }
+        verify(visiteSuiviRepository, never()).save(any());
+    }
+
+    @Test
+    void viser_passeUneFicheTermineeEnVisee_etEnregistreLaDateDuVisa() {
+        VisiteSuivi visite = visiteComplete();
+        visite.setStatut(StatutVisite.TERMINEE);
+        visite.setDateSignatureJunior(Instant.now().minusSeconds(3600));
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.viser(visite.getId());
+
+        assertThat(resultat.statut()).isEqualTo(StatutVisite.VISEE);
+        assertThat(resultat.dateVisaSenior()).isNotNull();
+        assertThat(resultat.visaEnRetard()).isFalse();
+    }
+
+    @Test
+    void viser_rejette_siLaFicheNEstPasTerminee() {
+        for (StatutVisite statut : List.of(StatutVisite.BROUILLON, StatutVisite.VISEE)) {
+            VisiteSuivi visite = visiteComplete();
+            visite.setStatut(statut);
+            when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+            assertThatThrownBy(() -> visiteSuiviService.viser(visite.getId()))
+                    .isInstanceOf(ConflitEtatException.class);
+        }
+        verify(visiteSuiviRepository, never()).save(any());
+    }
+
+    @Test
+    void signerPatient_enregistreLaDateEtLeSignataire_surUneFicheTermineeOuVisee() {
+        for (StatutVisite statut : List.of(StatutVisite.TERMINEE, StatutVisite.VISEE)) {
+            VisiteSuivi visite = visiteComplete();
+            visite.setStatut(statut);
+            when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+            VisiteSuiviModel resultat = visiteSuiviService.signerPatient(visite.getId(), SignatairePatient.AIDANT);
+
+            assertThat(resultat.signatairePatient()).isEqualTo(SignatairePatient.AIDANT);
+            assertThat(resultat.dateSignaturePatient()).isNotNull();
+            assertThat(resultat.statut()).isEqualTo(statut);
+        }
+    }
+
+    @Test
+    void signerPatient_rejette_surUnBrouillon_ouSiDejaSignee() {
+        VisiteSuivi brouillon = visiteComplete();
+        when(visiteSuiviRepository.findById(brouillon.getId())).thenReturn(Optional.of(brouillon));
+        assertThatThrownBy(() -> visiteSuiviService.signerPatient(brouillon.getId(), SignatairePatient.PATIENT))
+                .isInstanceOf(ConflitEtatException.class);
+
+        VisiteSuivi dejaSignee = visiteComplete();
+        dejaSignee.setStatut(StatutVisite.TERMINEE);
+        dejaSignee.setDateSignaturePatient(Instant.now());
+        dejaSignee.setSignatairePatient(SignatairePatient.PATIENT);
+        when(visiteSuiviRepository.findById(dejaSignee.getId())).thenReturn(Optional.of(dejaSignee));
+        assertThatThrownBy(() -> visiteSuiviService.signerPatient(dejaSignee.getId(), SignatairePatient.AIDANT))
+                .isInstanceOf(ConflitEtatException.class)
+                .hasMessageContaining("deja");
+        assertThat(dejaSignee.getSignatairePatient()).isEqualTo(SignatairePatient.PATIENT);
+        verify(visiteSuiviRepository, never()).save(any());
+    }
+
+    @Test
+    void findEnAttenteVisa_listeLesFichesTerminees_etSignaleLeRetardDeVisa() {
+        VisiteSuivi enRetard = visiteComplete();
+        enRetard.setStatut(StatutVisite.TERMINEE);
+        enRetard.setDateSignatureJunior(Instant.now().minus(Duration.ofHours(30)));
+        VisiteSuivi recente = visiteComplete();
+        recente.setStatut(StatutVisite.TERMINEE);
+        recente.setDateSignatureJunior(Instant.now().minus(Duration.ofHours(2)));
+        when(visiteSuiviRepository.findByStatutOrderByDateSignatureJuniorAsc(StatutVisite.TERMINEE))
+                .thenReturn(List.of(enRetard, recente));
+
+        List<VisiteSuiviModel> resultat = visiteSuiviService.findEnAttenteVisa();
+
+        assertThat(resultat).extracting(VisiteSuiviModel::id).containsExactly(enRetard.getId(), recente.getId());
+        assertThat(resultat).extracting(VisiteSuiviModel::visaEnRetard).containsExactly(true, false);
+    }
+
+    @Test
+    void delais_visaAppose26hApresLaSignature_estEnRetard_etSansSignatureLeDelaiEstInconnu() {
+        VisiteSuivi visee = visiteComplete();
+        visee.setStatut(StatutVisite.VISEE);
+        Instant signature = Instant.now().minus(Duration.ofDays(3));
+        visee.setDateSignatureJunior(signature);
+        visee.setDateVisaSenior(signature.plus(Duration.ofHours(26)));
+        when(visiteSuiviRepository.findById(visee.getId())).thenReturn(Optional.of(visee));
+        assertThat(visiteSuiviService.findById(visee.getId()).visaEnRetard()).isTrue();
+
+        VisiteSuivi brouillon = visiteBrouillon();
+        when(visiteSuiviRepository.findById(brouillon.getId())).thenReturn(Optional.of(brouillon));
+        VisiteSuiviModel sansDelais = visiteSuiviService.findById(brouillon.getId());
+        assertThat(sansDelais.echeanceVisa()).isNull();
+        assertThat(sansDelais.visaEnRetard()).isNull();
+        assertThat(sansDelais.echeanceCompteRendu()).isNull();
+        assertThat(sansDelais.compteRenduEnRetard()).isNull();
+    }
+
+    @Test
+    void delais_compteRenduAttenduDansLes12hApresLaFinDeLaVisite() {
+        VisiteSuivi visite = visiteComplete();
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        // Visite du 05/10/2026, depart 11 h : echeance a 23 h. Sans envoi, la date du jour sert de reference.
+        VisiteSuiviModel sansEnvoi = visiteSuiviService.findById(visite.getId());
+        assertThat(sansEnvoi.echeanceCompteRendu()).isEqualTo(LocalDateTime.of(2026, 10, 5, 23, 0));
+        assertThat(sansEnvoi.compteRenduEnRetard()).isTrue();
+
+        visite.setDateEnvoiCompteRendu(LocalDateTime.of(2026, 10, 5, 18, 0));
+        assertThat(visiteSuiviService.findById(visite.getId()).compteRenduEnRetard()).isFalse();
+
+        visite.setDateEnvoiCompteRendu(LocalDateTime.of(2026, 10, 6, 8, 0));
+        assertThat(visiteSuiviService.findById(visite.getId()).compteRenduEnRetard()).isTrue();
+    }
+
+    @Test
+    void mettreAJour_enregistreLaSaisieDmi() {
+        VisiteSuivi visite = visiteBrouillon();
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+
+        VisiteSuiviModel resultat = visiteSuiviService.mettreAJour(visite.getId(), VisiteSuiviModel.builder()
+                .dateSaisieDmi(LocalDate.of(2026, 10, 6)).saisieDmiPar("Dr Ndiaye").build());
+
+        assertThat(resultat.dateSaisieDmi()).isEqualTo(LocalDate.of(2026, 10, 6));
+        assertThat(resultat.saisieDmiPar()).isEqualTo("Dr Ndiaye");
+    }
+
+    @Test
     void verifierModifiable_accepteUnBrouillon_etRejetteUneFicheTerminee() {
         VisiteSuivi brouillon = visiteBrouillon();
         when(visiteSuiviRepository.findById(brouillon.getId())).thenReturn(Optional.of(brouillon));
@@ -508,6 +697,30 @@ class VisiteSuiviServiceTest {
                 .patient(PatientModel.builder().id(patient.getId()).build())
                 .medecinJunior(MedecinModel.builder().id(medecinJuniorId).build())
                 .medecinSenior(MedecinModel.builder().id(medecinSeniorId).build());
+    }
+
+    /**
+     * Brouillon qui satisfait tous les controles de la regle 8 (pret a etre termine).
+     */
+    private VisiteSuivi visiteComplete() {
+        VisiteSuivi visite = visiteBrouillon();
+        visite.setHeureDepart(LocalTime.of(11, 0));
+        visite.setTypeVisite(TypeVisite.PROGRAMMEE);
+        visite.setContactSenior("+221 77 640 12 30");
+        visite.setEtatGeneral(EtatGeneral.BON);
+        visite.setObservanceTraitement(ObservanceTraitement.BONNE);
+        visite.setSituationSociale(SituationSociale.STABLE);
+        visite.setDecision(DecisionVisite.PATIENT_STABLE_SUIVI_PROGRAMME);
+        visite.setResumeClinique("Patient stable");
+        visite.getConstantes().add(constante(visite, TypeConstante.TA, CreneauMesure.H0, "130", "80"));
+        visite.getConstantes().add(constante(visite, TypeConstante.FC, CreneauMesure.H0, "78", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.FR, CreneauMesure.H0, "16", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.SPO2, CreneauMesure.H0, "98", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.TEMPERATURE, CreneauMesure.H0, "37", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.GLYCEMIE, CreneauMesure.H0, "1", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.EVA, CreneauMesure.H0, "2", null));
+        visite.getConstantes().add(constante(visite, TypeConstante.GLASGOW, CreneauMesure.H0, "15", null));
+        return visite;
     }
 
     private VisiteSuivi visiteBrouillon() {

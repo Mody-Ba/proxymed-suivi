@@ -2,6 +2,7 @@ package com.proxymed.suivi.mappers;
 
 import com.proxymed.suivi.service.model.MedecinModel;
 import com.proxymed.suivi.service.model.PatientModel;
+import com.proxymed.suivi.service.model.VisiteEnAttenteVisaResponse;
 import com.proxymed.suivi.service.model.VisiteSuiviCreateRequest;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import com.proxymed.suivi.service.model.VisiteSuiviResponse;
@@ -84,6 +85,8 @@ public class VisiteSuiviMapper {
                 .prochaineVisiteDate(req.prochaineVisiteDate())
                 .evenementsIntercurrents(req.evenementsIntercurrents())
                 .themesAbordes(req.themesAbordes())
+                .dateSaisieDmi(req.dateSaisieDmi())
+                .saisieDmiPar(req.saisieDmiPar())
                 .build();
     }
 
@@ -135,6 +138,16 @@ public class VisiteSuiviMapper {
                 .evenementsIntercurrents(model.evenementsIntercurrents())
                 .themesAbordes(model.themesAbordes())
                 .traitements(traitementVisiteMapper.toResponseList(model.traitements()))
+                .dateSignatureJunior(model.dateSignatureJunior())
+                .dateVisaSenior(model.dateVisaSenior())
+                .dateSignaturePatient(model.dateSignaturePatient())
+                .signatairePatient(model.signatairePatient())
+                .dateSaisieDmi(model.dateSaisieDmi())
+                .saisieDmiPar(model.saisieDmiPar())
+                .echeanceCompteRendu(model.echeanceCompteRendu())
+                .compteRenduEnRetard(model.compteRenduEnRetard())
+                .echeanceVisa(model.echeanceVisa())
+                .visaEnRetard(model.visaEnRetard())
                 .dateCreation(model.dateCreation())
                 .dateMiseAJour(model.dateMiseAJour())
                 .build();
@@ -151,6 +164,26 @@ public class VisiteSuiviMapper {
                 .medecinJuniorNomComplet(nomComplet(model.medecinJunior()))
                 .medecinSeniorId(model.medecinSenior().id())
                 .medecinSeniorNomComplet(nomComplet(model.medecinSenior()))
+                .build();
+    }
+
+    public VisiteEnAttenteVisaResponse toEnAttenteVisaResponse(VisiteSuiviModel model) {
+        return VisiteEnAttenteVisaResponse.builder()
+                .id(model.id())
+                .numeroVisite(model.numeroVisite())
+                .dateVisite(model.dateVisite())
+                .patientId(model.patient().id())
+                .patientNomComplet(model.patient().nomComplet())
+                .numeroDossierProxymed(model.patient().numeroDossierProxymed())
+                .medecinJuniorId(model.medecinJunior().id())
+                .medecinJuniorNomComplet(nomComplet(model.medecinJunior()))
+                .medecinSeniorId(model.medecinSenior().id())
+                .medecinSeniorNomComplet(nomComplet(model.medecinSenior()))
+                .decision(model.decision())
+                .alerteDeclenchee(Boolean.TRUE.equals(model.alerteDeclenchee()))
+                .dateSignatureJunior(model.dateSignatureJunior())
+                .echeanceVisa(model.echeanceVisa())
+                .visaEnRetard(Boolean.TRUE.equals(model.visaEnRetard()))
                 .build();
     }
 

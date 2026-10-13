@@ -12,6 +12,7 @@ import com.proxymed.suivi.enums.StatutPlanPrevention;
 import com.proxymed.suivi.enums.ThemeEducation;
 import com.proxymed.suivi.enums.TypeVisite;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Builder;
 
 import java.time.LocalDate;
@@ -80,6 +81,11 @@ public record VisiteSuiviUpdateRequest(
         String resumeClinique,
         LocalDateTime dateEnvoiCompteRendu,
         MoyenTransmission moyenTransmission,
-        LocalDate prochaineVisiteDate
+        LocalDate prochaineVisiteDate,
+
+        // Section 9 : saisie dans le DMI (les signatures passent par leurs endpoints dedies)
+        LocalDate dateSaisieDmi,
+        @Size(max = 255, message = "255 caracteres au maximum")
+        String saisieDmiPar
 ) {
 }

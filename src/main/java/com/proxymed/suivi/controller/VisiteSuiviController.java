@@ -2,6 +2,8 @@ package com.proxymed.suivi.controller;
 
 import com.proxymed.suivi.mappers.VisiteSuiviMapper;
 import com.proxymed.suivi.service.VisiteSuiviService;
+import com.proxymed.suivi.service.model.SignaturePatientRequest;
+import com.proxymed.suivi.service.model.VisiteEnAttenteVisaResponse;
 import com.proxymed.suivi.service.model.VisiteSuiviCreateRequest;
 import com.proxymed.suivi.service.model.VisiteSuiviResponse;
 import com.proxymed.suivi.service.model.VisiteSuiviSummaryResponse;
@@ -48,6 +50,36 @@ public class VisiteSuiviController {
     @GetMapping("/visites/{id}")
     public VisiteSuiviResponse findById(@PathVariable UUID id) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.findById(id));
+    }
+
+    /**
+     * Fiches terminees en attente du visa du senior, de la plus ancienne a la plus recente.
+     */
+    @GetMapping("/visites/en-attente-visa")
+    public List<VisiteEnAttenteVisaResponse> findEnAttenteVisa() {
+        return visiteSuiviService.findEnAttenteVisa()
+                .stream().map(visiteSuiviMapper::toEnAttenteVisaResponse).toList();
+    }
+
+    /**
+     * Le medecin junior termine et signe la fiche (BROUILLON -> TERMINEE).
+     */
+    @PostMapping("/visites/{id}/terminer")
+    public VisiteSuiviResponse terminer(@PathVariable UUID id) {
+        return visiteSuiviMapper.toResponse(visiteSuiviService.terminer(id));
+    }
+
+    /**
+     * Visa du medecin senior (TERMINEE -> VISEE).
+     */
+    @PostMapping("/visites/{id}/viser")
+    public VisiteSuiviResponse viser(@PathVariable UUID id) {
+        return visiteSuiviMapper.toResponse(visiteSuiviService.viser(id));
+    }
+
+    @PostMapping("/visites/{id}/signature-patient")
+    public VisiteSuiviResponse signerPatient(@PathVariable UUID id, @Valid @RequestBody SignaturePatientRequest request) {
+        return visiteSuiviMapper.toResponse(visiteSuiviService.signerPatient(id, request.signataire()));
     }
 
     @PutMapping("/visites/{id}")
