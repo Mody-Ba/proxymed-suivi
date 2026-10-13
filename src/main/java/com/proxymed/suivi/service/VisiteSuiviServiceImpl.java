@@ -3,6 +3,7 @@ package com.proxymed.suivi.service;
 import com.proxymed.suivi.entity.VisiteSuivi;
 import com.proxymed.suivi.enums.EvenementIntercurrent;
 import com.proxymed.suivi.enums.RoleMedecin;
+import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.StatutVisite;
 import com.proxymed.suivi.enums.TypeConstante;
@@ -22,7 +23,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -45,6 +48,12 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Transactional
 public class VisiteSuiviServiceImpl implements VisiteSuiviService {
+
+    /**
+     * Regle 11 (delais informatifs, non bloquants).
+     */
+    static final Duration DELAI_COMPTE_RENDU = Duration.ofHours(12);
+    static final Duration DELAI_VISA = Duration.ofHours(24);
 
     private final VisiteSuiviRepository visiteSuiviRepository;
     private final PatientService patientService;
@@ -117,6 +126,72 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
     }
 
     @Override
+    public VisiteSuiviModel terminer(UUID id) {
+        VisiteSuivi entity = getEntityById(id);
+        VisiteSuiviModel courant = toModel(entity);
+        if (courant.statut() != StatutVisite.BROUILLON) {
+            throw new ConflitEtatException(
+                    "Seule une fiche en BROUILLON peut etre terminee (statut actuel : " + courant.statut() + ")");
+        }
+        List<String> manquements = ControleFicheTerminee.manquements(courant);
+        if (!manquements.isEmpty()) {
+            throw new RegleGestionException(
+                    "La fiche ne peut pas etre terminee : " + manquements.size() + " element(s) requis manquant(s)",
+                    manquements);
+        }
+
+        Instant maintenant = Instant.now();
+        return enregistrer(entity, courant.toBuilder()
+                .statut(StatutVisite.TERMINEE)
+                .dateSignatureJunior(maintenant)
+                .dateMiseAJour(maintenant)
+                .build());
+    }
+
+    @Override
+    public VisiteSuiviModel viser(UUID id) {
+        VisiteSuivi entity = getEntityById(id);
+        VisiteSuiviModel courant = toModel(entity);
+        if (courant.statut() != StatutVisite.TERMINEE) {
+            throw new ConflitEtatException(
+                    "Seule une fiche TERMINEE peut recevoir le visa du senior (statut actuel : " + courant.statut() + ")");
+        }
+
+        Instant maintenant = Instant.now();
+        return enregistrer(entity, courant.toBuilder()
+                .statut(StatutVisite.VISEE)
+                .dateVisaSenior(maintenant)
+                .dateMiseAJour(maintenant)
+                .build());
+    }
+
+    @Override
+    public VisiteSuiviModel signerPatient(UUID id, SignatairePatient signataire) {
+        VisiteSuivi entity = getEntityById(id);
+        VisiteSuiviModel courant = toModel(entity);
+        if (courant.statut() == StatutVisite.BROUILLON) {
+            throw new ConflitEtatException(
+                    "La signature du patient s'enregistre sur une fiche TERMINEE ou VISEE (statut actuel : BROUILLON)");
+        }
+        if (courant.dateSignaturePatient() != null) {
+            throw new ConflitEtatException("La signature du patient est deja enregistree");
+        }
+
+        Instant maintenant = Instant.now();
+        return enregistrer(entity, courant.toBuilder()
+                .dateSignaturePatient(maintenant)
+                .signatairePatient(signataire)
+                .dateMiseAJour(maintenant)
+                .build());
+    }
+
+    @Override
+    public List<VisiteSuiviModel> findEnAttenteVisa() {
+        return visiteSuiviRepository.findByStatutOrderByDateSignatureJuniorAsc(StatutVisite.TERMINEE)
+                .stream().map(this::toModel).toList();
+    }
+
+    @Override
     public void verifierModifiable(UUID id) {
         verifierModifiable(findById(id));
     }
@@ -128,6 +203,11 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
     private VisiteSuivi getEntityById(UUID id) {
         return visiteSuiviRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Visite introuvable : " + id));
+    }
+
+    private VisiteSuiviModel enregistrer(VisiteSuivi entity, VisiteSuiviModel model) {
+        visiteSuiviMapper.applyScalarFieldsToEntity(entity, model);
+        return toModel(visiteSuiviRepository.save(entity));
     }
 
     private VisiteSuiviModel toModel(VisiteSuivi entity) {
@@ -143,7 +223,48 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
                 .traitements(model.traitements().stream()
                         .sorted(Comparator.comparing(TraitementVisiteModel::id))
                         .toList())
+                .echeanceCompteRendu(echeanceCompteRendu(model))
+                .compteRenduEnRetard(compteRenduEnRetard(model))
+                .echeanceVisa(echeanceVisa(model))
+                .visaEnRetard(visaEnRetard(model))
                 .build();
+    }
+
+    /**
+     * Regle 11 : le resume clinique doit partir au senior dans les 12 h qui suivent la fin de
+     * la visite (date de la visite + heure de depart). Null tant que l'heure de depart manque.
+     */
+    private LocalDateTime echeanceCompteRendu(VisiteSuiviModel model) {
+        if (model.dateVisite() == null || model.heureDepart() == null) {
+            return null;
+        }
+        return LocalDateTime.of(model.dateVisite(), model.heureDepart()).plus(DELAI_COMPTE_RENDU);
+    }
+
+    private Boolean compteRenduEnRetard(VisiteSuiviModel model) {
+        LocalDateTime echeance = echeanceCompteRendu(model);
+        if (echeance == null) {
+            return null;
+        }
+        LocalDateTime reference = model.dateEnvoiCompteRendu() != null ? model.dateEnvoiCompteRendu() : LocalDateTime.now();
+        return reference.isAfter(echeance);
+    }
+
+    /**
+     * Regle 11 : visa du senior dans les 24 h qui suivent la signature du junior.
+     * Null tant que la fiche n'est pas terminee.
+     */
+    private Instant echeanceVisa(VisiteSuiviModel model) {
+        return model.dateSignatureJunior() != null ? model.dateSignatureJunior().plus(DELAI_VISA) : null;
+    }
+
+    private Boolean visaEnRetard(VisiteSuiviModel model) {
+        Instant echeance = echeanceVisa(model);
+        if (echeance == null) {
+            return null;
+        }
+        Instant reference = model.dateVisaSenior() != null ? model.dateVisaSenior() : Instant.now();
+        return reference.isAfter(echeance);
     }
 
     /**
@@ -260,6 +381,8 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
                 .dateEnvoiCompteRendu(coalesce(maj.dateEnvoiCompteRendu(), courant.dateEnvoiCompteRendu()))
                 .moyenTransmission(coalesce(maj.moyenTransmission(), courant.moyenTransmission()))
                 .prochaineVisiteDate(coalesce(maj.prochaineVisiteDate(), courant.prochaineVisiteDate()))
+                .dateSaisieDmi(coalesce(maj.dateSaisieDmi(), courant.dateSaisieDmi()))
+                .saisieDmiPar(coalesce(maj.saisieDmiPar(), courant.saisieDmiPar()))
                 .build();
     }
 

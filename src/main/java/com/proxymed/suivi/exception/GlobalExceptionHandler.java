@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(RegleGestionException.class)
     public ResponseEntity<ErrorResponse> handleRegleGestion(RegleGestionException ex) {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Regle de gestion non respectee", ex.getMessage()));
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Regle de gestion non respectee", ex.getMessage(), ex.getDetails()));
     }
 
     @ExceptionHandler(ConflitEtatException.class)

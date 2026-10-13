@@ -212,3 +212,4 @@ Pour chaque étape : tests unitaires des services (Mockito) et tests d'intégrat
 3. Qui a le droit de cocher les décisions de référence ou d'hospitalisation : le junior (après appel du sénior) ou seulement le sénior ?
 4. Bornes de validité des constantes vitales, à valider médicalement.
 5. Faut-il bloquer une visite si le patient n'a pas de consultation initiale éligible dans le projet 1 ?
+6. `dateSaisieDmi` et `saisieDmiPar` ne sont modifiables que par le `PUT` de la visite, donc seulement en `BROUILLON`. Sur la fiche papier, la ligne « Fiche saisie dans DMI le … par … » se remplit après la visite : faut-il pouvoir les renseigner sur une fiche `TERMINEE` ou `VISEE` (endpoint dédié), ou les remplir automatiquement ?

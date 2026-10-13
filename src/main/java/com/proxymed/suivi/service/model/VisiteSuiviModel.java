@@ -6,6 +6,7 @@ import com.proxymed.suivi.enums.EtatGeneral;
 import com.proxymed.suivi.enums.EvenementIntercurrent;
 import com.proxymed.suivi.enums.MoyenTransmission;
 import com.proxymed.suivi.enums.ObservanceTraitement;
+import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.SituationSociale;
 import com.proxymed.suivi.enums.StatutPlanPrevention;
@@ -25,7 +26,7 @@ import java.util.UUID;
  * Couche interne neutre : ni le contrat API (VisiteSuiviCreateRequest/UpdateRequest/Response),
  * ni l'entite JPA. Pour une intention de creation ou de mise a jour, patient et medecins ne
  * portent que leur id ; sur le chemin de lecture ils sont complets.
- * grilleConstantes, alerteDeclenchee et alertes ne sont jamais persistes : le service les
+ * grilleConstantes, alerteDeclenchee, alertes et les delais ne sont jamais persistes : le service les
  * recalcule a chaque lecture a partir de constantes et de signesAlerteCliniques.
  */
 @Builder(toBuilder = true)
@@ -91,6 +92,21 @@ public record VisiteSuiviModel(
         LocalDateTime dateEnvoiCompteRendu,
         MoyenTransmission moyenTransmission,
         LocalDate prochaineVisiteDate,
+
+        // Section 9 : signatures et validation
+        Instant dateSignatureJunior,
+        Instant dateVisaSenior,
+        Instant dateSignaturePatient,
+        SignatairePatient signatairePatient,
+        LocalDate dateSaisieDmi,
+        String saisieDmiPar,
+
+        // Delais informatifs (regle 11), recalcules a chaque lecture : compte rendu au senior
+        // sous 12 h apres la fin de la visite, visa du senior sous 24 h apres la signature du junior
+        LocalDateTime echeanceCompteRendu,
+        Boolean compteRenduEnRetard,
+        Instant echeanceVisa,
+        Boolean visaEnRetard,
 
         Instant dateCreation,
         Instant dateMiseAJour

@@ -1,5 +1,6 @@
 package com.proxymed.suivi.service;
 
+import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 
 import java.util.List;
@@ -23,6 +24,26 @@ public interface VisiteSuiviService {
      * Mise a jour partielle : seuls les champs non nuls de l'intention sont appliques.
      */
     VisiteSuiviModel mettreAJour(UUID id, VisiteSuiviModel intention);
+
+    /**
+     * Le junior termine et signe : BROUILLON -> TERMINEE, apres verification des champs requis.
+     */
+    VisiteSuiviModel terminer(UUID id);
+
+    /**
+     * Visa du senior : TERMINEE -> VISEE.
+     */
+    VisiteSuiviModel viser(UUID id);
+
+    /**
+     * Signature du patient ou de l'aidant, sur une fiche TERMINEE ou VISEE.
+     */
+    VisiteSuiviModel signerPatient(UUID id, SignatairePatient signataire);
+
+    /**
+     * Fiches terminees en attente du visa du senior, de la plus ancienne a la plus recente.
+     */
+    List<VisiteSuiviModel> findEnAttenteVisa();
 
     /**
      * Verifie que la visite existe (404) et est encore en BROUILLON (409). Sert aux services

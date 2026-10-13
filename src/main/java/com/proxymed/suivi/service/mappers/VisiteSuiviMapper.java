@@ -94,6 +94,12 @@ public class VisiteSuiviMapper {
         entity.setDateEnvoiCompteRendu(model.dateEnvoiCompteRendu());
         entity.setMoyenTransmission(model.moyenTransmission());
         entity.setProchaineVisiteDate(model.prochaineVisiteDate());
+        entity.setDateSignatureJunior(model.dateSignatureJunior());
+        entity.setDateVisaSenior(model.dateVisaSenior());
+        entity.setDateSignaturePatient(model.dateSignaturePatient());
+        entity.setSignatairePatient(model.signatairePatient());
+        entity.setDateSaisieDmi(model.dateSaisieDmi());
+        entity.setSaisieDmiPar(model.saisieDmiPar());
         entity.setStatut(model.statut());
         entity.setDateMiseAJour(model.dateMiseAJour());
     }
@@ -167,6 +173,12 @@ public class VisiteSuiviMapper {
                 .dateEnvoiCompteRendu(entity.getDateEnvoiCompteRendu())
                 .moyenTransmission(entity.getMoyenTransmission())
                 .prochaineVisiteDate(entity.getProchaineVisiteDate())
+                .dateSignatureJunior(entity.getDateSignatureJunior())
+                .dateVisaSenior(entity.getDateVisaSenior())
+                .dateSignaturePatient(entity.getDateSignaturePatient())
+                .signatairePatient(entity.getSignatairePatient())
+                .dateSaisieDmi(entity.getDateSaisieDmi())
+                .saisieDmiPar(entity.getSaisieDmiPar())
                 .evenementsIntercurrents(entity.getEvenementsIntercurrents().stream().sorted().toList())
                 .themesAbordes(entity.getThemesAbordes().stream().sorted().toList())
                 .traitements(traitementVisiteMapper.toModelList(entity.getTraitements()))

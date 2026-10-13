@@ -6,6 +6,7 @@ import com.proxymed.suivi.enums.EtatGeneral;
 import com.proxymed.suivi.enums.EvenementIntercurrent;
 import com.proxymed.suivi.enums.MoyenTransmission;
 import com.proxymed.suivi.enums.ObservanceTraitement;
+import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.SituationSociale;
 import com.proxymed.suivi.enums.StatutPlanPrevention;
@@ -83,6 +84,21 @@ public record VisiteSuiviResponse(
         LocalDateTime dateEnvoiCompteRendu,
         MoyenTransmission moyenTransmission,
         LocalDate prochaineVisiteDate,
+
+        // Section 9 : signatures et validation
+        Instant dateSignatureJunior,
+        Instant dateVisaSenior,
+        Instant dateSignaturePatient,
+        SignatairePatient signatairePatient,
+        LocalDate dateSaisieDmi,
+        String saisieDmiPar,
+
+        // Delais informatifs (regle 11), recalcules a chaque lecture : compte rendu au senior
+        // sous 12 h apres la fin de la visite, visa du senior sous 24 h apres la signature du junior
+        LocalDateTime echeanceCompteRendu,
+        Boolean compteRenduEnRetard,
+        Instant echeanceVisa,
+        Boolean visaEnRetard,
 
         Instant dateCreation,
         Instant dateMiseAJour

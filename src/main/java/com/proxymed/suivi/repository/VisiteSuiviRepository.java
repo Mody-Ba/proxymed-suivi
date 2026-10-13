@@ -1,6 +1,7 @@
 package com.proxymed.suivi.repository;
 
 import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.StatutVisite;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -13,4 +14,6 @@ public interface VisiteSuiviRepository extends JpaRepository<VisiteSuivi, UUID> 
     long countByPatientId(UUID patientId);
 
     List<VisiteSuivi> findByPatientIdOrderByNumeroVisiteDesc(UUID patientId);
+
+    List<VisiteSuivi> findByStatutOrderByDateSignatureJuniorAsc(StatutVisite statut);
 }
