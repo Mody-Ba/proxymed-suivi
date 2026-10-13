@@ -1,6 +1,7 @@
 package com.proxymed.suivi.service;
 
 import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.EvenementIntercurrent;
 import com.proxymed.suivi.enums.RoleMedecin;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
 import com.proxymed.suivi.enums.StatutVisite;
@@ -14,6 +15,7 @@ import com.proxymed.suivi.service.model.AlerteModel;
 import com.proxymed.suivi.service.model.ConstanteVisiteModel;
 import com.proxymed.suivi.service.model.LigneGrilleConstantesModel;
 import com.proxymed.suivi.service.model.MedecinModel;
+import com.proxymed.suivi.service.model.TraitementVisiteModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -87,6 +89,7 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
         VisiteSuivi entity = getEntityById(id);
         VisiteSuiviModel courant = toModel(entity);
         verifierModifiable(courant);
+        verifierEvenementsIntercurrents(intention.evenementsIntercurrents());
 
         if (intention.medecinJunior() != null) {
             MedecinModel junior = verifierRole(intention.medecinJunior().id(), RoleMedecin.JUNIOR);
@@ -98,6 +101,12 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
         }
         if (intention.signesAlerteCliniques() != null) {
             visiteSuiviMapper.appliquerSignesAlerteCliniques(entity, intention.signesAlerteCliniques());
+        }
+        if (intention.evenementsIntercurrents() != null) {
+            visiteSuiviMapper.appliquerEvenementsIntercurrents(entity, intention.evenementsIntercurrents());
+        }
+        if (intention.themesAbordes() != null) {
+            visiteSuiviMapper.appliquerThemesAbordes(entity, intention.themesAbordes());
         }
 
         VisiteSuiviModel fusionne = fusionnerChampsScalaires(courant, intention).toBuilder()
@@ -131,6 +140,9 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
                 .grilleConstantes(construireGrille(constantes))
                 .alerteDeclenchee(!alertes.isEmpty())
                 .alertes(alertes)
+                .traitements(model.traitements().stream()
+                        .sorted(Comparator.comparing(TraitementVisiteModel::id))
+                        .toList())
                 .build();
     }
 
@@ -202,6 +214,17 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
         }
     }
 
+    /**
+     * "Aucun" ne peut pas etre coche en meme temps qu'un evenement intercurrent.
+     */
+    private void verifierEvenementsIntercurrents(List<EvenementIntercurrent> evenements) {
+        if (evenements != null && evenements.contains(EvenementIntercurrent.AUCUN)
+                && evenements.stream().distinct().count() > 1) {
+            throw new RegleGestionException(
+                    "L'evenement intercurrent AUCUN ne peut pas etre coche avec d'autres evenements");
+        }
+    }
+
     private VisiteSuiviModel fusionnerChampsScalaires(VisiteSuiviModel courant, VisiteSuiviModel maj) {
         return courant.toBuilder()
                 .dateVisite(coalesce(maj.dateVisite(), courant.dateVisite()))
@@ -214,6 +237,29 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
                 .heureAppelSenior(coalesce(maj.heureAppelSenior(), courant.heureAppelSenior()))
                 .heureReponseSenior(coalesce(maj.heureReponseSenior(), courant.heureReponseSenior()))
                 .decisionAppelSenior(coalesce(maj.decisionAppelSenior(), courant.decisionAppelSenior()))
+                .etatGeneral(coalesce(maj.etatGeneral(), courant.etatGeneral()))
+                .etatGeneralPrecision(coalesce(maj.etatGeneralPrecision(), courant.etatGeneralPrecision()))
+                .plaintePrincipale(coalesce(maj.plaintePrincipale(), courant.plaintePrincipale()))
+                .evenementsPrecision(coalesce(maj.evenementsPrecision(), courant.evenementsPrecision()))
+                .examenCardiovasculaire(coalesce(maj.examenCardiovasculaire(), courant.examenCardiovasculaire()))
+                .examenRespiratoire(coalesce(maj.examenRespiratoire(), courant.examenRespiratoire()))
+                .examenNeurologique(coalesce(maj.examenNeurologique(), courant.examenNeurologique()))
+                .examenDigestifAutre(coalesce(maj.examenDigestifAutre(), courant.examenDigestifAutre()))
+                .examenCutane(coalesce(maj.examenCutane(), courant.examenCutane()))
+                .observanceTraitement(coalesce(maj.observanceTraitement(), courant.observanceTraitement()))
+                .raisonsNonObservance(coalesce(maj.raisonsNonObservance(), courant.raisonsNonObservance()))
+                .themesAutresPrecision(coalesce(maj.themesAutresPrecision(), courant.themesAutresPrecision()))
+                .comprehensionPatient(coalesce(maj.comprehensionPatient(), courant.comprehensionPatient()))
+                .statutPlanPrevention(coalesce(maj.statutPlanPrevention(), courant.statutPlanPrevention()))
+                .situationSociale(coalesce(maj.situationSociale(), courant.situationSociale()))
+                .problemesSociaux(coalesce(maj.problemesSociaux(), courant.problemesSociaux()))
+                .signalementDass(coalesce(maj.signalementDass(), courant.signalementDass()))
+                .heureContactDass(coalesce(maj.heureContactDass(), courant.heureContactDass()))
+                .decision(coalesce(maj.decision(), courant.decision()))
+                .resumeClinique(coalesce(maj.resumeClinique(), courant.resumeClinique()))
+                .dateEnvoiCompteRendu(coalesce(maj.dateEnvoiCompteRendu(), courant.dateEnvoiCompteRendu()))
+                .moyenTransmission(coalesce(maj.moyenTransmission(), courant.moyenTransmission()))
+                .prochaineVisiteDate(coalesce(maj.prochaineVisiteDate(), courant.prochaineVisiteDate()))
                 .build();
     }
 

@@ -1,7 +1,16 @@
 package com.proxymed.suivi.entity;
 
+import com.proxymed.suivi.enums.ComprehensionPatient;
+import com.proxymed.suivi.enums.DecisionVisite;
+import com.proxymed.suivi.enums.EtatGeneral;
+import com.proxymed.suivi.enums.EvenementIntercurrent;
+import com.proxymed.suivi.enums.MoyenTransmission;
+import com.proxymed.suivi.enums.ObservanceTraitement;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
+import com.proxymed.suivi.enums.SituationSociale;
+import com.proxymed.suivi.enums.StatutPlanPrevention;
 import com.proxymed.suivi.enums.StatutVisite;
+import com.proxymed.suivi.enums.ThemeEducation;
 import com.proxymed.suivi.enums.TypeVisite;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -25,6 +34,7 @@ import lombok.Setter;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -34,7 +44,7 @@ import java.util.UUID;
 
 /**
  * Entite racine de la Fiche 2 (visite de suivi mensuel a domicile).
- * Porte pour l'instant la section 1 (identification) et la section 3 (surveillance).
+ * Porte les sections 1 a 8 ; la section 9 (signatures) arrive avec le cycle de vie.
  * Les regles de gestion (numero de visite, roles des medecins, statut modifiable, etc.)
  * sont appliquees au niveau service, pas ici.
  */
@@ -116,6 +126,109 @@ public class VisiteSuivi {
 
     @Column(name = "decision_appel_senior", columnDefinition = "TEXT")
     private String decisionAppelSenior;
+
+    // Section 2 : etat general
+    @Enumerated(EnumType.STRING)
+    @Column(name = "etat_general")
+    private EtatGeneral etatGeneral;
+
+    @Column(name = "etat_general_precision", columnDefinition = "TEXT")
+    private String etatGeneralPrecision;
+
+    @Column(name = "plainte_principale", columnDefinition = "TEXT")
+    private String plaintePrincipale;
+
+    @ElementCollection
+    @CollectionTable(name = "visite_evenement_intercurrent", joinColumns = @JoinColumn(name = "visite_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "evenement", nullable = false)
+    @Builder.Default
+    private Set<EvenementIntercurrent> evenementsIntercurrents = new HashSet<>();
+
+    @Column(name = "evenements_precision", columnDefinition = "TEXT")
+    private String evenementsPrecision;
+
+    // Section 4 : examen clinique cible
+    @Column(name = "examen_cardiovasculaire", columnDefinition = "TEXT")
+    private String examenCardiovasculaire;
+
+    @Column(name = "examen_respiratoire", columnDefinition = "TEXT")
+    private String examenRespiratoire;
+
+    @Column(name = "examen_neurologique", columnDefinition = "TEXT")
+    private String examenNeurologique;
+
+    @Column(name = "examen_digestif_autre", columnDefinition = "TEXT")
+    private String examenDigestifAutre;
+
+    @Column(name = "examen_cutane", columnDefinition = "TEXT")
+    private String examenCutane;
+
+    // Section 5 : observance et traitements
+    @Enumerated(EnumType.STRING)
+    @Column(name = "observance_traitement")
+    private ObservanceTraitement observanceTraitement;
+
+    @Column(name = "raisons_non_observance", columnDefinition = "TEXT")
+    private String raisonsNonObservance;
+
+    /**
+     * Tableau des traitements (section 5). Les lignes sont creees, modifiees et supprimees par
+     * TraitementVisiteService ; cette collection ne sert qu'a les relire avec la visite.
+     */
+    @OneToMany(mappedBy = "visite")
+    @Builder.Default
+    private List<TraitementVisite> traitements = new ArrayList<>();
+
+    // Section 6 : education therapeutique
+    @ElementCollection
+    @CollectionTable(name = "visite_theme_aborde", joinColumns = @JoinColumn(name = "visite_id"))
+    @Enumerated(EnumType.STRING)
+    @Column(name = "theme", nullable = false)
+    @Builder.Default
+    private Set<ThemeEducation> themesAbordes = new HashSet<>();
+
+    @Column(name = "themes_autres_precision", columnDefinition = "TEXT")
+    private String themesAutresPrecision;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "comprehension_patient")
+    private ComprehensionPatient comprehensionPatient;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "statut_plan_prevention")
+    private StatutPlanPrevention statutPlanPrevention;
+
+    // Section 7 : bilan social et coordination DASS
+    @Enumerated(EnumType.STRING)
+    @Column(name = "situation_sociale")
+    private SituationSociale situationSociale;
+
+    @Column(name = "problemes_sociaux", columnDefinition = "TEXT")
+    private String problemesSociaux;
+
+    @Column(name = "signalement_dass")
+    private Boolean signalementDass;
+
+    @Column(name = "heure_contact_dass")
+    private LocalTime heureContactDass;
+
+    // Section 8 : conclusion
+    @Enumerated(EnumType.STRING)
+    private DecisionVisite decision;
+
+    @Column(name = "resume_clinique", columnDefinition = "TEXT")
+    private String resumeClinique;
+
+    @Column(name = "date_envoi_compte_rendu")
+    private LocalDateTime dateEnvoiCompteRendu;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "moyen_transmission")
+    private MoyenTransmission moyenTransmission;
+
+    @Column(name = "prochaine_visite_date")
+    private LocalDate prochaineVisiteDate;
 
     @Column(name = "date_creation", nullable = false)
     private Instant dateCreation;

@@ -1,7 +1,9 @@
 package com.proxymed.suivi.service.mappers;
 
 import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.enums.EvenementIntercurrent;
 import com.proxymed.suivi.enums.SigneAlerteClinique;
+import com.proxymed.suivi.enums.ThemeEducation;
 import com.proxymed.suivi.repository.MedecinRepository;
 import com.proxymed.suivi.repository.PatientRepository;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
@@ -28,6 +30,7 @@ public class VisiteSuiviMapper {
     private final PatientMapper patientMapper;
     private final MedecinMapper medecinMapper;
     private final ConstanteVisiteMapper constanteVisiteMapper;
+    private final TraitementVisiteMapper traitementVisiteMapper;
 
     public VisiteSuivi toNewEntity(VisiteSuiviModel model) {
         return VisiteSuivi.builder()
@@ -51,9 +54,10 @@ public class VisiteSuiviMapper {
     /**
      * Applique les champs scalaires (hors relations) du modele sur une entite managee
      * existante (mutation en place, necessaire pour qu'Hibernate suive les changements).
-     * Les medecins et les signes d'alerte cliniques se changent via appliquerMedecinJunior/
-     * appliquerMedecinSenior/appliquerSignesAlerteCliniques, pour ne les toucher que quand
-     * le service decide explicitement de les modifier.
+     * Les medecins et les listes a choix multiples se changent via appliquerMedecinJunior/
+     * appliquerMedecinSenior/appliquerSignesAlerteCliniques/appliquerEvenementsIntercurrents/
+     * appliquerThemesAbordes, pour ne les toucher que quand le service decide explicitement
+     * de les modifier.
      * Le patient, le numero de visite et la date de creation ne changent jamais.
      */
     public void applyScalarFieldsToEntity(VisiteSuivi entity, VisiteSuiviModel model) {
@@ -67,6 +71,29 @@ public class VisiteSuiviMapper {
         entity.setHeureAppelSenior(model.heureAppelSenior());
         entity.setHeureReponseSenior(model.heureReponseSenior());
         entity.setDecisionAppelSenior(model.decisionAppelSenior());
+        entity.setEtatGeneral(model.etatGeneral());
+        entity.setEtatGeneralPrecision(model.etatGeneralPrecision());
+        entity.setPlaintePrincipale(model.plaintePrincipale());
+        entity.setEvenementsPrecision(model.evenementsPrecision());
+        entity.setExamenCardiovasculaire(model.examenCardiovasculaire());
+        entity.setExamenRespiratoire(model.examenRespiratoire());
+        entity.setExamenNeurologique(model.examenNeurologique());
+        entity.setExamenDigestifAutre(model.examenDigestifAutre());
+        entity.setExamenCutane(model.examenCutane());
+        entity.setObservanceTraitement(model.observanceTraitement());
+        entity.setRaisonsNonObservance(model.raisonsNonObservance());
+        entity.setThemesAutresPrecision(model.themesAutresPrecision());
+        entity.setComprehensionPatient(model.comprehensionPatient());
+        entity.setStatutPlanPrevention(model.statutPlanPrevention());
+        entity.setSituationSociale(model.situationSociale());
+        entity.setProblemesSociaux(model.problemesSociaux());
+        entity.setSignalementDass(model.signalementDass());
+        entity.setHeureContactDass(model.heureContactDass());
+        entity.setDecision(model.decision());
+        entity.setResumeClinique(model.resumeClinique());
+        entity.setDateEnvoiCompteRendu(model.dateEnvoiCompteRendu());
+        entity.setMoyenTransmission(model.moyenTransmission());
+        entity.setProchaineVisiteDate(model.prochaineVisiteDate());
         entity.setStatut(model.statut());
         entity.setDateMiseAJour(model.dateMiseAJour());
     }
@@ -85,6 +112,16 @@ public class VisiteSuiviMapper {
     public void appliquerSignesAlerteCliniques(VisiteSuivi entity, List<SigneAlerteClinique> signes) {
         entity.getSignesAlerteCliniques().clear();
         entity.getSignesAlerteCliniques().addAll(signes);
+    }
+
+    public void appliquerEvenementsIntercurrents(VisiteSuivi entity, List<EvenementIntercurrent> evenements) {
+        entity.getEvenementsIntercurrents().clear();
+        entity.getEvenementsIntercurrents().addAll(evenements);
+    }
+
+    public void appliquerThemesAbordes(VisiteSuivi entity, List<ThemeEducation> themes) {
+        entity.getThemesAbordes().clear();
+        entity.getThemesAbordes().addAll(themes);
     }
 
     public VisiteSuiviModel toModel(VisiteSuivi entity) {
@@ -107,6 +144,32 @@ public class VisiteSuiviMapper {
                 .heureAppelSenior(entity.getHeureAppelSenior())
                 .heureReponseSenior(entity.getHeureReponseSenior())
                 .decisionAppelSenior(entity.getDecisionAppelSenior())
+                .etatGeneral(entity.getEtatGeneral())
+                .etatGeneralPrecision(entity.getEtatGeneralPrecision())
+                .plaintePrincipale(entity.getPlaintePrincipale())
+                .evenementsPrecision(entity.getEvenementsPrecision())
+                .examenCardiovasculaire(entity.getExamenCardiovasculaire())
+                .examenRespiratoire(entity.getExamenRespiratoire())
+                .examenNeurologique(entity.getExamenNeurologique())
+                .examenDigestifAutre(entity.getExamenDigestifAutre())
+                .examenCutane(entity.getExamenCutane())
+                .observanceTraitement(entity.getObservanceTraitement())
+                .raisonsNonObservance(entity.getRaisonsNonObservance())
+                .themesAutresPrecision(entity.getThemesAutresPrecision())
+                .comprehensionPatient(entity.getComprehensionPatient())
+                .statutPlanPrevention(entity.getStatutPlanPrevention())
+                .situationSociale(entity.getSituationSociale())
+                .problemesSociaux(entity.getProblemesSociaux())
+                .signalementDass(entity.getSignalementDass())
+                .heureContactDass(entity.getHeureContactDass())
+                .decision(entity.getDecision())
+                .resumeClinique(entity.getResumeClinique())
+                .dateEnvoiCompteRendu(entity.getDateEnvoiCompteRendu())
+                .moyenTransmission(entity.getMoyenTransmission())
+                .prochaineVisiteDate(entity.getProchaineVisiteDate())
+                .evenementsIntercurrents(entity.getEvenementsIntercurrents().stream().sorted().toList())
+                .themesAbordes(entity.getThemesAbordes().stream().sorted().toList())
+                .traitements(traitementVisiteMapper.toModelList(entity.getTraitements()))
                 .dateCreation(entity.getDateCreation())
                 .dateMiseAJour(entity.getDateMiseAJour())
                 .build();
