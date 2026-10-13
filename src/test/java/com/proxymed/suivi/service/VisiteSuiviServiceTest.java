@@ -37,8 +37,11 @@ import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.io.ByteArrayResource;
+import org.springframework.core.io.Resource;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -76,6 +79,8 @@ class VisiteSuiviServiceTest {
     private PatientService patientService;
     @Mock
     private MedecinService medecinService;
+    @Mock
+    private PdfGenerationService pdfGenerationService;
 
     private VisiteSuiviService visiteSuiviService;
 
@@ -94,7 +99,7 @@ class VisiteSuiviServiceTest {
                         new com.proxymed.suivi.service.mappers.TraitementVisiteMapper(visiteSuiviRepository));
 
         visiteSuiviService = new VisiteSuiviServiceImpl(
-                visiteSuiviRepository, patientService, medecinService, visiteDbMapper);
+                visiteSuiviRepository, patientService, medecinService, visiteDbMapper, pdfGenerationService);
 
         patient = Patient.builder().id(UUID.randomUUID()).numeroDossierProxymed("PXM-2026-0002")
                 .nomComplet("Abdoulaye Fall").dateNaissance(LocalDate.now().minusYears(57)).sexe(Sexe.M).build();
@@ -666,6 +671,32 @@ class VisiteSuiviServiceTest {
 
         assertThat(resultat.dateSaisieDmi()).isEqualTo(LocalDate.of(2026, 10, 6));
         assertThat(resultat.saisieDmiPar()).isEqualTo("Dr Ndiaye");
+    }
+
+    @Test
+    void genererPdf_transmetLaFicheCompleteAuGenerateur() {
+        VisiteSuivi visite = visiteComplete();
+        visite.getConstantes().add(constante(visite, TypeConstante.FC, CreneauMesure.H_PLUS_1, "130", null));
+        when(visiteSuiviRepository.findById(visite.getId())).thenReturn(Optional.of(visite));
+        Resource pdf = new ByteArrayResource("%PDF-".getBytes());
+        when(pdfGenerationService.genererFicheVisite(any())).thenReturn(pdf);
+
+        assertThat(visiteSuiviService.genererPdf(visite.getId())).isSameAs(pdf);
+
+        ArgumentCaptor<VisiteSuiviModel> fiche = ArgumentCaptor.forClass(VisiteSuiviModel.class);
+        verify(pdfGenerationService).genererFicheVisite(fiche.capture());
+        assertThat(fiche.getValue().id()).isEqualTo(visite.getId());
+        assertThat(fiche.getValue().alerteDeclenchee()).isTrue();
+        assertThat(fiche.getValue().constantes()).hasSize(9);
+    }
+
+    @Test
+    void genererPdf_rejette_siVisiteIntrouvable() {
+        UUID id = UUID.randomUUID();
+        when(visiteSuiviRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> visiteSuiviService.genererPdf(id)).isInstanceOf(ResourceNotFoundException.class);
+        verify(pdfGenerationService, never()).genererFicheVisite(any());
     }
 
     @Test

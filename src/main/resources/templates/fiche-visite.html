@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<!--
+  Fiche 2 - Visite de suivi mensuel a domicile.
+  Rendu par PdfGenerationService (Thymeleaf -> XHTML -> openhtmltopdf) : le HTML produit doit
+  rester du XHTML bien forme (pas d'entites HTML nommees type &nbsp; -> utiliser &#160;),
+  et la mise en page n'utilise que ce que supporte openhtmltopdf (CSS 2.1 : tables/floats, pas de flexbox).
+  La police PDF standard (Helvetica) n'a ni emoji ni signe "superieur ou egal" : on ecrit ">=".
+  Variables :
+    v = VisiteSuiviModel complet (alertes et delais deja calcules par le service)
+    qrCode = PNG base64 du QR code (UUID de la visite)
+    fuseauHoraire = ZoneId d'affichage des horodatages (Instant) de signature
+    grille = cases remplies du tableau des constantes, par cle "TYPE:CRENEAU" (texte, alerte)
+    constantesEnAlerte = noms des constantes dont un seuil d'alerte est franchi
+    signes, evenements, themes = noms des cases cochees des listes a choix multiples
+-->
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:th="http://www.thymeleaf.org" lang="fr">
+<head>
+    <meta charset="UTF-8"/>
+    <title th:text="'Fiche 2 - ' + (${v.patient?.nomComplet} ?: '')">Fiche 2</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 14mm 12mm 16mm 12mm;
+            @bottom-left {
+                content: "PROXYMED - Fiche 2 - Visite de suivi mensuel a domicile";
+                font-family: Helvetica, sans-serif;
+                font-size: 7pt;
+                color: #666666;
+            }
+            @bottom-right {
+                content: "Page " counter(page) " / " counter(pages);
+                font-family: Helvetica, sans-serif;
+                font-size: 7pt;
+                color: #666666;
+            }
+        }
+
+        body {
+            font-family: Helvetica, sans-serif;
+            font-size: 9pt;
+            color: #1a1a1a;
+            line-height: 1.3;
+        }
+
+        /* En-tete */
+        .entete { width: 100%; border-collapse: collapse; border-bottom: 2px solid #1b6e20; margin-bottom: 6px; }
+        .entete td { vertical-align: top; padding: 0 0 6px 0; }
+        .entete .titre { font-size: 15pt; font-weight: bold; color: #1b6e20; }
+        .entete .sous-titre { font-size: 10pt; font-weight: bold; margin-top: 2px; }
+        .entete .mention { font-size: 8pt; color: #555555; margin-top: 1px; }
+        .entete .meta { margin-top: 5px; font-size: 8.5pt; }
+        .entete .meta span.lbl { color: #555555; }
+        .entete .qr { width: 100px; text-align: center; }
+        .entete .qr img { width: 90px; height: 90px; }
+        .statut { display: inline-block; padding: 1px 6px; border: 1px solid #1b6e20; color: #1b6e20; font-weight: bold; font-size: 8pt; }
+
+        .rappel { border: 1px solid #c77700; background-color: #fff6e5; padding: 4px 6px; font-size: 8pt; margin-bottom: 4px; }
+        .bandeau-alerte { border: 1px solid #b00020; background-color: #fdecee; color: #b00020; padding: 4px 6px; margin-bottom: 4px; }
+        .bandeau-alerte .titre-alerte { font-weight: bold; }
+
+        /* Sections */
+        .section { margin-top: 8px; page-break-inside: avoid; }
+        .section h2 {
+            font-size: 10pt;
+            margin: 0 0 4px 0;
+            padding: 3px 6px;
+            background-color: #1b6e20;
+            color: #ffffff;
+        }
+        .section h3 { font-size: 9pt; margin: 6px 0 3px 0; color: #1b6e20; }
+
+        /* Grille libelle / valeur */
+        table.grille { width: 100%; border-collapse: collapse; }
+        table.grille td { padding: 2px 4px; vertical-align: top; border-bottom: 1px dotted #bbbbbb; }
+        table.grille td.lbl { width: 22%; color: #555555; }
+        table.grille td.val { width: 28%; }
+        table.grille td.val-large { width: 78%; }
+
+        /* Tableaux de donnees */
+        table.donnees { width: 100%; border-collapse: collapse; margin-top: 2px; }
+        table.donnees th { background-color: #e6f2e7; text-align: left; font-size: 8.5pt; padding: 3px 4px; border: 1px solid #a9c9ab; }
+        table.donnees td { padding: 3px 4px; border: 1px solid #a9c9ab; vertical-align: top; }
+        table.donnees th.centre, table.donnees td.centre { text-align: center; }
+        td.alerte { color: #b00020; font-weight: bold; background-color: #fdecee; }
+
+        .encadre-seuils { border: 1px solid #b00020; padding: 4px 6px; margin-top: 5px; }
+        .encadre-seuils .titre-seuils { color: #b00020; font-weight: bold; margin-bottom: 3px; }
+        table.cases { width: 100%; border-collapse: collapse; }
+        table.cases td { width: 25%; padding: 1px 4px 1px 0; vertical-align: top; }
+        /* Colonnes etroites : le libelle peut passer a la ligne, la case reste devant le texte. */
+        table.cases .choix { display: inline; margin-right: 0; white-space: normal; }
+
+        /* Cases a cocher (police PDF standard : pas de glyphe case a cocher, on dessine la case en CSS) */
+        .choix { display: inline-block; margin-right: 10px; white-space: nowrap; }
+        .case {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            line-height: 8px;
+            border: 1px solid #333333;
+            text-align: center;
+            font-size: 7pt;
+            font-weight: bold;
+            margin-right: 3px;
+            vertical-align: 1px;
+        }
+        .coche { background-color: #1b6e20; color: #ffffff; border-color: #1b6e20; }
+
+        .texte-libre { white-space: pre-wrap; }
+        .vide { color: #999999; font-style: italic; }
+        .note { font-size: 8pt; color: #c77700; margin-top: 3px; }
+        .retard { color: #b00020; font-weight: bold; }
+
+        /* Signatures */
+        table.signatures { width: 100%; border-collapse: collapse; margin-top: 2px; }
+        table.signatures td { width: 33.33%; border: 1px solid #a9c9ab; padding: 5px; vertical-align: top; height: 75px; }
+        table.signatures .role { font-weight: bold; color: #1b6e20; margin-bottom: 3px; }
+        table.signatures .detail { font-size: 8pt; color: #555555; }
+        table.signatures .etat-signe { color: #1b6e20; font-weight: bold; margin-top: 3px; }
+        table.signatures .etat-non-signe { color: #999999; font-style: italic; margin-top: 3px; }
+    </style>
+</head>
+<body>
+
+<!-- ============================ EN-TETE ============================ -->
+<table class="entete">
+    <tr>
+        <td>
+            <div class="titre">PROXYMED</div>
+            <div class="sous-titre">Fiche 2 - Visite de suivi mensuel à domicile</div>
+            <div class="mention">Visite réalisée exclusivement par un médecin JUNIOR sous supervision sénior</div>
+            <div class="meta">
+                <span class="lbl">N° dossier PROXYMED :</span>
+                <strong th:text="${v.patient?.numeroDossierProxymed} ?: '-'">PXM-2026-0001</strong>
+                &#160;&#160;
+                <span class="lbl">N° DMI :</span>
+                <strong th:text="${v.patient?.numeroDmi} ?: '-'">DMI-0001</strong>
+                &#160;&#160;
+                <span class="lbl">Statut :</span>
+                <span class="statut" th:text="${v.statut} ?: '-'">BROUILLON</span>
+            </div>
+            <div class="meta">
+                <span class="lbl">Identifiant de la fiche :</span>
+                <span th:text="${v.id}">00000000-0000-0000-0000-000000000000</span>
+            </div>
+        </td>
+        <td class="qr">
+            <img th:src="'data:image/png;base64,' + ${qrCode}" alt="QR code"/>
+        </td>
+    </tr>
+</table>
+
+<div class="rappel">
+    <strong>Rappel doctrine :</strong> en cas de situation complexe, d'aggravation ou de doute clinique, le médecin
+    junior DOIT contacter immédiatement son médecin sénior référent AVANT toute décision thérapeutique ou de référence.
+</div>
+
+<div class="bandeau-alerte" th:if="${v.alerteDeclenchee == true}">
+    <span class="titre-alerte">ALERTE DÉCLENCHÉE - appel immédiat du médecin sénior :</span>
+    <span th:each="a, etat : ${v.alertes}"
+          th:text="${#strings.replace(a.seuilFranchi, '≥', '>=')} + (${a.creneau != null} ? ' (' + ${#strings.replace(#strings.replace(a.creneau.name(), 'H_PLUS_', 'H+'), '_', '')} + ')' : '') + (${etat.last} ? '' : ' ; ')">TA &gt; 180/110</span>
+</div>
+
+<!-- ============================ 1. IDENTIFICATION ============================ -->
+<div class="section">
+    <h2>1. Identification de la visite</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">Nom complet du patient</td>
+            <td class="val-large" colspan="3"><strong th:text="${v.patient?.nomComplet} ?: '-'">Nom</strong></td>
+        </tr>
+        <tr>
+            <td class="lbl">Âge</td>
+            <td class="val" th:text="${v.patient?.age != null} ? ${v.patient.age} + ' ans' : '-'">-</td>
+            <td class="lbl">Sexe</td>
+            <td class="val">
+                <th:block th:replace="~{::case(${v.patient?.sexe?.name() == 'M'}, 'M')}"/>
+                <th:block th:replace="~{::case(${v.patient?.sexe?.name() == 'F'}, 'F')}"/>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Date de la visite</td>
+            <td class="val" th:text="${v.dateVisite != null} ? ${#temporals.format(v.dateVisite, 'dd/MM/yyyy')} : '-'">-</td>
+            <td class="lbl">N° visite (cumul)</td>
+            <td class="val" th:text="${v.numeroVisite != null} ? 'Visite n° ' + ${v.numeroVisite} : '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Heure d'arrivée</td>
+            <td class="val" th:text="${v.heureArrivee != null} ? ${#temporals.format(v.heureArrivee, 'HH:mm')} : '-'">-</td>
+            <td class="lbl">Heure de départ</td>
+            <td class="val" th:text="${v.heureDepart != null} ? ${#temporals.format(v.heureDepart, 'HH:mm')} : '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Adresse de la visite</td>
+            <td class="val-large" colspan="3"
+                th:text="${v.adresseVisite} ?: ((${v.patient?.adresseDomicile} ?: '-') + ' (domicile enregistré)')">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Médecin JUNIOR</td>
+            <td class="val-large" colspan="3"
+                th:text="${v.medecinJunior != null} ? 'Dr ' + ${v.medecinJunior.prenom} + ' ' + ${v.medecinJunior.nom} + ' - N° Ordre : ' + (${v.medecinJunior.numeroOrdre} ?: '-') : '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Médecin SÉNIOR référent</td>
+            <td class="val-large" colspan="3"
+                th:text="${v.medecinSenior != null} ? 'Dr ' + ${v.medecinSenior.prenom} + ' ' + ${v.medecinSenior.nom} + ' - Tél. : ' + (${v.medecinSenior.telephone} ?: '-') : '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Contact sénior pendant la visite</td>
+            <td class="val" th:text="${v.contactSenior} ?: '-'">-</td>
+            <td class="lbl">Contact joignable ?</td>
+            <td class="val"><th:block th:replace="~{::oui-non(${v.contactSeniorJoignable})}"/></td>
+        </tr>
+        <tr>
+            <td class="lbl">Type de visite</td>
+            <td class="val-large" colspan="3">
+                <th:block th:replace="~{::case(${v.typeVisite?.name() == 'PROGRAMMEE'}, 'Visite programmée')}"/>
+                <th:block th:replace="~{::case(${v.typeVisite?.name() == 'URGENTE'}, 'Visite urgente')}"/>
+                <th:block th:replace="~{::case(${v.typeVisite?.name() == 'CONTROLE_POST_ALERTE'}, 'Visite de contrôle post-alerte')}"/>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 2. ETAT GENERAL ============================ -->
+<div class="section">
+    <h2>2. État général du patient au moment de la visite</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">État général à l'arrivée</td>
+            <td class="val-large">
+                <th:block th:replace="~{::case(${v.etatGeneral?.name() == 'BON'}, 'Bon état général')}"/>
+                <th:block th:replace="~{::case(${v.etatGeneral?.name() == 'ALTERE'}, 'État altéré')}"/>
+                <th:block th:replace="~{::case(${v.etatGeneral?.name() == 'URGENCE_APPEL_SENIOR'}, 'Urgence - appel sénior immédiat')}"/>
+                <div th:if="${v.etatGeneralPrecision != null}" class="texte-libre" th:text="'Précision : ' + ${v.etatGeneralPrecision}">Précision</div>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Plainte principale</td>
+            <td class="val-large texte-libre" th:text="${v.plaintePrincipale} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Évènements intercurrents depuis la dernière visite</td>
+            <td class="val-large">
+                <table class="cases">
+                    <tr>
+                        <td><th:block th:replace="~{::case(${evenements.contains('HOSPITALISATION')}, 'Hospitalisation')}"/></td>
+                        <td><th:block th:replace="~{::case(${evenements.contains('CONSULTATION_URGENCE')}, 'Consultation urgence')}"/></td>
+                        <td><th:block th:replace="~{::case(${evenements.contains('CHUTE_ACCIDENT')}, 'Chute / accident')}"/></td>
+                        <td><th:block th:replace="~{::case(${evenements.contains('AGGRAVATION_SYMPTOMES')}, 'Aggravation symptômes')}"/></td>
+                    </tr>
+                    <tr>
+                        <td><th:block th:replace="~{::case(${evenements.contains('CHANGEMENT_TRAITEMENT')}, 'Changement traitement')}"/></td>
+                        <td><th:block th:replace="~{::case(${evenements.contains('NON_OBSERVANCE')}, 'Non-observance')}"/></td>
+                        <td><th:block th:replace="~{::case(${evenements.contains('PROBLEME_SOCIAL')}, 'Problème social')}"/></td>
+                        <td><th:block th:replace="~{::case(${evenements.contains('AUCUN')}, 'Aucun')}"/></td>
+                    </tr>
+                </table>
+                <div th:if="${v.evenementsPrecision != null}" class="texte-libre" th:text="'Précision : ' + ${v.evenementsPrecision}">Précision</div>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 3. CONSTANTES ET SURVEILLANCE ============================ -->
+<div class="section">
+    <h2>3. Constantes vitales et surveillance</h2>
+    <h3>3.1. Mesures à l'arrivée et en cours de visite</h3>
+    <table class="donnees"
+           th:with="lignes=${ {
+               {'TA', 'Tension artérielle (mmHg)', '< 140/90'},
+               {'FC', 'Fréquence cardiaque (batt/min)', '60-100'},
+               {'FR', 'Fréquence respiratoire (R/min)', '12-20'},
+               {'SPO2', 'SpO2 (%)', '>= 95 %'},
+               {'TEMPERATURE', 'Température (°C)', '36-37,5'},
+               {'GLYCEMIE', 'Glycémie capillaire (g/l)', '0,7-1,1 (à jeun)'},
+               {'EVA', 'Score de douleur EVA (0-10)', 'Cible < 3'},
+               {'GLASGOW', 'Score de Glasgow', '15 (normal)'} } },
+               creneaux=${ {'H0', 'H_PLUS_1', 'H_PLUS_2', 'H_PLUS_3', 'H_PLUS_4'} }">
+        <tr>
+            <th style="width: 30%;">Constante</th>
+            <th class="centre" style="width: 10%;">H0</th>
+            <th class="centre" style="width: 10%;">H+1</th>
+            <th class="centre" style="width: 10%;">H+2</th>
+            <th class="centre" style="width: 10%;">H+3</th>
+            <th class="centre" style="width: 10%;">H+4</th>
+            <th>Valeurs normales</th>
+        </tr>
+        <tr th:each="ligne : ${lignes}">
+            <td th:text="${ligne[1]}">Tension artérielle (mmHg)</td>
+            <td th:each="creneau : ${creneaux}"
+                th:with="cellule=${grille[ligne[0] + ':' + creneau]}"
+                class="centre" th:classappend="${cellule != null and cellule.alerte} ? 'alerte'"
+                th:text="${cellule != null} ? ${cellule.texte} : ''">130/80</td>
+            <td th:text="${ligne[2]}">&lt; 140/90</td>
+        </tr>
+    </table>
+
+    <div class="encadre-seuils">
+        <div class="titre-seuils">SEUILS D'ALERTE - Appel immédiat du médecin sénior si :</div>
+        <table class="cases">
+            <tr>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('TA')}, 'TA > 180/110 ou < 90/60')}"/></td>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('FC')}, 'FC > 120 ou < 50 batt/min')}"/></td>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('SPO2')}, 'SpO2 < 90 %')}"/></td>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('FR')}, 'FR > 25 ou < 10 R/min')}"/></td>
+            </tr>
+            <tr>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('TEMPERATURE')}, 'T° > 38,5 °C ou < 35 °C')}"/></td>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('GLYCEMIE')}, 'Glycémie < 0,6 ou > 2,5 g/l')}"/></td>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('GLASGOW')}, 'Glasgow < 13')}"/></td>
+                <td><th:block th:replace="~{::case(${constantesEnAlerte.contains('EVA')}, 'Douleur EVA >= 8/10')}"/></td>
+            </tr>
+            <tr>
+                <td><th:block th:replace="~{::case(${signes.contains('SIGNE_NEUROLOGIQUE_FOCAL_AIGU')}, 'Signe neurologique focal aigu')}"/></td>
+                <td><th:block th:replace="~{::case(${signes.contains('DETRESSE_RESPIRATOIRE')}, 'Détresse respiratoire')}"/></td>
+                <td><th:block th:replace="~{::case(${signes.contains('DOULEUR_THORACIQUE')}, 'Douleur thoracique')}"/></td>
+                <td><th:block th:replace="~{::case(${signes.contains('AUTRE_SIGNE_CLINIQUE_GRAVE')}, 'Autre signe clinique grave')}"/></td>
+            </tr>
+        </table>
+    </div>
+    <table class="grille" style="margin-top: 4px;">
+        <tr>
+            <td class="lbl">Heure d'appel sénior</td>
+            <td class="val" th:text="${v.heureAppelSenior != null} ? ${#temporals.format(v.heureAppelSenior, 'HH:mm')} : '-'">-</td>
+            <td class="lbl">Heure de réponse</td>
+            <td class="val" th:text="${v.heureReponseSenior != null} ? ${#temporals.format(v.heureReponseSenior, 'HH:mm')} : '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Décision du sénior</td>
+            <td class="val-large texte-libre" colspan="3" th:text="${v.decisionAppelSenior} ?: '-'">-</td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 4. EXAMEN CLINIQUE ============================ -->
+<div class="section">
+    <h2>4. Examen clinique ciblé (selon pathologie du patient)</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">Cardiovasculaire (pouls, OMI, TSVJ, bruits du cœur)</td>
+            <td class="val-large texte-libre" th:text="${v.examenCardiovasculaire} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Respiratoire (MV, crépitants, dyspnée)</td>
+            <td class="val-large texte-libre" th:text="${v.examenRespiratoire} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Neurologique (conscience, déficit, marche)</td>
+            <td class="val-large texte-libre" th:text="${v.examenNeurologique} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Digestif / autre</td>
+            <td class="val-large texte-libre" th:text="${v.examenDigestifAutre} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Cutané / plaie / escarre / site d'injection</td>
+            <td class="val-large texte-libre" th:text="${v.examenCutane} ?: '-'">-</td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 5. OBSERVANCE ET TRAITEMENT ============================ -->
+<div class="section">
+    <h2>5. Observance thérapeutique et traitement</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">Observance du traitement</td>
+            <td class="val-large">
+                <th:block th:replace="~{::case(${v.observanceTraitement?.name() == 'BONNE'}, 'Bonne (>= 80 % des prises)')}"/>
+                <th:block th:replace="~{::case(${v.observanceTraitement?.name() == 'PARTIELLE'}, 'Partielle (50-80 %)')}"/>
+                <th:block th:replace="~{::case(${v.observanceTraitement?.name() == 'MAUVAISE'}, 'Mauvaise (< 50 %)')}"/>
+                <th:block th:replace="~{::case(${v.observanceTraitement?.name() == 'NON_EVALUABLE'}, 'Non évaluable')}"/>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Raisons de non-observance</td>
+            <td class="val-large texte-libre" th:text="${v.raisonsNonObservance} ?: '-'">-</td>
+        </tr>
+    </table>
+    <h3>Traitement en cours (selon prescription du médecin sénior)</h3>
+    <table class="donnees" th:if="${!#lists.isEmpty(v.traitements)}">
+        <tr>
+            <th style="width: 27%;">Médicament</th>
+            <th style="width: 22%;">Posologie</th>
+            <th style="width: 12%;">Voie</th>
+            <th style="width: 15%;">Observance</th>
+            <th>Problème ?</th>
+        </tr>
+        <tr th:each="t : ${v.traitements}">
+            <td th:text="${t.medicament}">Amlodipine 5 mg</td>
+            <td th:text="${t.posologie} ?: '-'">-</td>
+            <td th:text="${t.voie} ?: '-'">-</td>
+            <td><th:block th:replace="~{::oui-non(${t.observant})}"/></td>
+            <td>
+                <th:block th:replace="~{::oui-non(${t.probleme})}"/>
+                <div th:if="${t.problemePrecision != null}" th:text="${t.problemePrecision}">Précision</div>
+            </td>
+        </tr>
+    </table>
+    <div class="vide" th:if="${#lists.isEmpty(v.traitements)}">Aucun traitement saisi</div>
+    <div class="note">Tout ajustement thérapeutique doit être VALIDÉ par le médecin sénior référent avant administration.</div>
+</div>
+
+<!-- ============================ 6. EDUCATION THERAPEUTIQUE ============================ -->
+<div class="section">
+    <h2>6. Éducation thérapeutique et conseils</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">Thèmes abordés lors de la visite</td>
+            <td class="val-large">
+                <table class="cases">
+                    <tr>
+                        <td><th:block th:replace="~{::case(${themes.contains('ALIMENTATION_NUTRITION')}, 'Alimentation / nutrition')}"/></td>
+                        <td><th:block th:replace="~{::case(${themes.contains('ACTIVITE_PHYSIQUE_ADAPTEE')}, 'Activité physique adaptée')}"/></td>
+                        <td><th:block th:replace="~{::case(${themes.contains('GESTION_MEDICAMENTS')}, 'Gestion médicaments')}"/></td>
+                        <td><th:block th:replace="~{::case(${themes.contains('AUTOSURVEILLANCE_TA_GLYCEMIE')}, 'Autosurveillance')}"/></td>
+                    </tr>
+                    <tr>
+                        <td><th:block th:replace="~{::case(${themes.contains('HYGIENE_PREVENTION')}, 'Hygiène / prévention')}"/></td>
+                        <td><th:block th:replace="~{::case(${themes.contains('SIGNES_ALERTE_A_SURVEILLER')}, 'Signes d’alerte')}"/></td>
+                        <td><th:block th:replace="~{::case(${themes.contains('SOUTIEN_PSYCHOLOGIQUE')}, 'Soutien psychologique')}"/></td>
+                        <td><th:block th:replace="~{::case(${themes.contains('AUTRES')}, 'Autres')}"/></td>
+                    </tr>
+                </table>
+                <div th:if="${v.themesAutresPrecision != null}" class="texte-libre" th:text="'Autres : ' + ${v.themesAutresPrecision}">Autres</div>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Compréhension des conseils</td>
+            <td class="val-large">
+                <th:block th:replace="~{::case(${v.comprehensionPatient?.name() == 'BONNE'}, 'Bonne')}"/>
+                <th:block th:replace="~{::case(${v.comprehensionPatient?.name() == 'PARTIELLE'}, 'Partielle')}"/>
+                <th:block th:replace="~{::case(${v.comprehensionPatient?.name() == 'A_REEXPLIQUER'}, 'À réexpliquer')}"/>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Plan Personnalisé de Prévention (PPP)</td>
+            <td class="val-large">
+                <th:block th:replace="~{::case(${v.statutPlanPrevention?.name() == 'MIS_A_JOUR'}, 'Mis à jour')}"/>
+                <th:block th:replace="~{::case(${v.statutPlanPrevention?.name() == 'INCHANGE'}, 'Inchangé')}"/>
+                <th:block th:replace="~{::case(${v.statutPlanPrevention?.name() == 'A_REVISER_PAR_SENIOR'}, 'À réviser par le sénior')}"/>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 7. BILAN SOCIAL ============================ -->
+<div class="section">
+    <h2>7. Bilan social et coordination DASS</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">Situation sociale à cette visite</td>
+            <td class="val-large" colspan="3">
+                <th:block th:replace="~{::case(${v.situationSociale?.name() == 'STABLE'}, 'Stable')}"/>
+                <th:block th:replace="~{::case(${v.situationSociale?.name() == 'DETERIOREE'}, 'Détériorée')}"/>
+                <th:block th:replace="~{::case(${v.situationSociale?.name() == 'AMELIOREE'}, 'Améliorée')}"/>
+                <th:block th:replace="~{::case(${v.situationSociale?.name() == 'URGENCE_SOCIALE'}, 'Urgence sociale')}"/>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Problèmes sociaux identifiés</td>
+            <td class="val-large texte-libre" colspan="3" th:text="${v.problemesSociaux} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Signalement à la DASS requis ?</td>
+            <td class="val"><th:block th:replace="~{::oui-non(${v.signalementDass})}"/></td>
+            <td class="lbl">Heure de contact DASS</td>
+            <td class="val" th:text="${v.heureContactDass != null} ? ${#temporals.format(v.heureContactDass, 'HH:mm')} : '-'">-</td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 8. CONCLUSION ============================ -->
+<div class="section">
+    <h2>8. Conclusion de la visite et décisions</h2>
+    <table class="grille">
+        <tr>
+            <td class="lbl">Décision à l'issue de la visite</td>
+            <td class="val-large" colspan="3">
+                <div><th:block th:replace="~{::case(${v.decision?.name() == 'PATIENT_STABLE_SUIVI_PROGRAMME'}, 'Patient stable - poursuite du suivi programmé')}"/></div>
+                <div><th:block th:replace="~{::case(${v.decision?.name() == 'SUIVI_RENFORCE'}, 'Suivi renforcé - fréquence augmentée')}"/></div>
+                <div><th:block th:replace="~{::case(${v.decision?.name() == 'REFERENCE_MEDECIN_SENIOR'}, 'Référence au médecin sénior pour consultation')}"/></div>
+                <div><th:block th:replace="~{::case(${v.decision?.name() == 'REFERENCE_EPS'}, 'Référence vers EPS (urgence ou spécialiste)')}"/></div>
+                <div><th:block th:replace="~{::case(${v.decision?.name() == 'HOSPITALISATION_SAMU'}, 'Hospitalisation requise - contacter SAMU')}"/></div>
+                <div><th:block th:replace="~{::case(${v.decision?.name() == 'DECES_CONSTATE'}, 'Décès constaté - procédure SAMU activée')}"/></div>
+                <div class="note">Les décisions de référence et d'hospitalisation relèvent EXCLUSIVEMENT du médecin sénior.</div>
+            </td>
+        </tr>
+        <tr>
+            <td class="lbl">Résumé clinique (transmis au sénior dans les 12 heures)</td>
+            <td class="val-large texte-libre" colspan="3" th:text="${v.resumeClinique} ?: '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Date d'envoi du compte rendu</td>
+            <td class="val">
+                <span th:text="${v.dateEnvoiCompteRendu != null} ? ${#temporals.format(v.dateEnvoiCompteRendu, 'dd/MM/yyyy HH:mm')} : '-'">-</span>
+                <span class="retard" th:if="${v.dateEnvoiCompteRendu != null and v.compteRenduEnRetard == true}">(hors délai)</span>
+            </td>
+            <td class="lbl">Prochaine visite planifiée</td>
+            <td class="val" th:text="${v.prochaineVisiteDate != null} ? ${#temporals.format(v.prochaineVisiteDate, 'dd/MM/yyyy')} : '-'">-</td>
+        </tr>
+        <tr>
+            <td class="lbl">Moyen de transmission</td>
+            <td class="val-large" colspan="3">
+                <th:block th:replace="~{::case(${v.moyenTransmission?.name() == 'DMI'}, 'DMI')}"/>
+                <th:block th:replace="~{::case(${v.moyenTransmission?.name() == 'TELEPHONE'}, 'Téléphone')}"/>
+                <th:block th:replace="~{::case(${v.moyenTransmission?.name() == 'WHATSAPP_PRO'}, 'WhatsApp Pro')}"/>
+            </td>
+        </tr>
+    </table>
+</div>
+
+<!-- ============================ 9. SIGNATURE ET VALIDATION ============================ -->
+<div class="section">
+    <h2>9. Signature et validation</h2>
+    <table class="signatures">
+        <tr>
+            <td>
+                <div class="role">Médecin JUNIOR</div>
+                <div th:text="${v.medecinJunior != null} ? 'Dr ' + ${v.medecinJunior.prenom} + ' ' + ${v.medecinJunior.nom} : '-'">Dr X</div>
+                <div class="detail" th:text="'N° Ordre : ' + (${v.medecinJunior?.numeroOrdre} ?: '-')">N° Ordre</div>
+                <th:block th:replace="~{::signature(${v.dateSignatureJunior}, 'Signé', 'Non signé')}"/>
+            </td>
+            <td>
+                <div class="role">Médecin SÉNIOR référent</div>
+                <div th:text="${v.medecinSenior != null} ? 'Dr ' + ${v.medecinSenior.prenom} + ' ' + ${v.medecinSenior.nom} : '-'">Dr Y</div>
+                <div class="detail">Visa de validation (dans les 24 h)</div>
+                <th:block th:replace="~{::signature(${v.dateVisaSenior}, 'Visé', 'Non visé')}"/>
+                <div class="retard" th:if="${v.dateVisaSenior != null and v.visaEnRetard == true}">(hors délai)</div>
+            </td>
+            <td>
+                <div class="role">Patient / aidant</div>
+                <div class="detail">Signature ou empreinte</div>
+                <div th:if="${v.signatairePatient != null}"
+                     th:text="'Signataire : ' + (${v.signatairePatient.name() == 'AIDANT'} ? 'aidant' : 'patient')">Signataire</div>
+                <th:block th:replace="~{::signature(${v.dateSignaturePatient}, 'Signé', 'Non signé')}"/>
+            </td>
+        </tr>
+    </table>
+    <table class="grille" style="margin-top: 4px;">
+        <tr>
+            <td class="lbl">Fiche saisie dans DMI PROXYMED le</td>
+            <td class="val" th:text="${v.dateSaisieDmi != null} ? ${#temporals.format(v.dateSaisieDmi, 'dd/MM/yyyy')} : '-'">-</td>
+            <td class="lbl">Par</td>
+            <td class="val" th:text="${v.saisieDmiPar} ?: '-'">-</td>
+        </tr>
+    </table>
+</div>
+
+<!--
+  Fragments reutilisables. th:remove="all" : le bloc n'apparait pas dans le rendu,
+  mais les fragments restent selectionnables via ~{::nom(...)}.
+-->
+<div th:remove="all">
+    <span th:fragment="case(coche, libelle)" class="choix"><span class="case" th:classappend="${coche} ? 'coche'" th:text="${coche} ? 'X' : '&#160;'"></span><span th:text="${libelle}">Libellé</span></span>
+
+    <th:block th:fragment="oui-non(valeur)">
+        <span class="choix"><span class="case" th:classappend="${valeur == true} ? 'coche'" th:text="${valeur == true} ? 'X' : '&#160;'"></span>Oui</span>
+        <span class="choix"><span class="case" th:classappend="${valeur == false} ? 'coche'" th:text="${valeur == false} ? 'X' : '&#160;'"></span>Non</span>
+    </th:block>
+
+    <th:block th:fragment="signature(horodatage, libelleSigne, libelleNonSigne)">
+        <div th:if="${horodatage != null}" class="etat-signe"
+             th:text="${libelleSigne} + ' le ' + ${#temporals.format(horodatage.atZone(fuseauHoraire), 'dd/MM/yyyy HH:mm')}">Signé le ...</div>
+        <div th:unless="${horodatage != null}" class="etat-non-signe" th:text="${libelleNonSigne}">Non signé</div>
+    </th:block>
+</div>
+
+</body>
+</html>

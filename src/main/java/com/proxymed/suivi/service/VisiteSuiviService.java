@@ -2,6 +2,7 @@ package com.proxymed.suivi.service;
 
 import com.proxymed.suivi.enums.SignatairePatient;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
+import org.springframework.core.io.Resource;
 
 import java.util.List;
 import java.util.UUID;
@@ -44,6 +45,11 @@ public interface VisiteSuiviService {
      * Fiches terminees en attente du visa du senior, de la plus ancienne a la plus recente.
      */
     List<VisiteSuiviModel> findEnAttenteVisa();
+
+    /**
+     * PDF de la fiche (quel que soit son statut), avec le QR code de la visite.
+     */
+    Resource genererPdf(UUID id);
 
     /**
      * Verifie que la visite existe (404) et est encore en BROUILLON (409). Sert aux services

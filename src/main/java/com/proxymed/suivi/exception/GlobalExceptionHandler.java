@@ -2,6 +2,7 @@ package com.proxymed.suivi.exception;
 
 import jakarta.validation.ConstraintViolationException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -11,24 +12,29 @@ import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 import java.util.List;
 
+/**
+ * Le type de contenu JSON est force sur chaque reponse d'erreur : sans cela, une erreur sur
+ * un endpoint binaire appele avec "Accept: application/pdf" (cas de Swagger) echouerait en
+ * 406 au lieu de renvoyer le message d'erreur.
+ */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(ResourceNotFoundException.class)
     public ResponseEntity<ErrorResponse> handleNotFound(ResourceNotFoundException ex) {
-        return ResponseEntity.status(HttpStatus.NOT_FOUND)
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.NOT_FOUND.value(), "Ressource introuvable", ex.getMessage()));
     }
 
     @ExceptionHandler(RegleGestionException.class)
     public ResponseEntity<ErrorResponse> handleRegleGestion(RegleGestionException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Regle de gestion non respectee", ex.getMessage(), ex.getDetails()));
     }
 
     @ExceptionHandler(ConflitEtatException.class)
     public ResponseEntity<ErrorResponse> handleConflitEtat(ConflitEtatException ex) {
-        return ResponseEntity.status(HttpStatus.CONFLICT)
+        return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), "Action incompatible avec le statut de la fiche", ex.getMessage()));
     }
 
@@ -37,13 +43,13 @@ public class GlobalExceptionHandler {
         List<String> details = ex.getBindingResult().getFieldErrors().stream()
                 .map(fe -> fe.getField() + " : " + fe.getDefaultMessage())
                 .toList();
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Validation echouee", "Un ou plusieurs champs sont invalides", details));
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<ErrorResponse> handleConstraintViolation(ConstraintViolationException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Validation echouee", ex.getMessage()));
     }
 
@@ -58,7 +64,7 @@ public class GlobalExceptionHandler {
         String message = ex.getMostSpecificCause() instanceof UnrecognizedPropertyException upe
                 ? "Champ inconnu dans la requete : " + upe.getPropertyName()
                 : "Le corps de la requete est illisible ou mal forme";
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Requete invalide", message));
     }
 }
