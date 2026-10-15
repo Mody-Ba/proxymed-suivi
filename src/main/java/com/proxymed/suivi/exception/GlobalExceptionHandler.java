@@ -8,6 +8,8 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 import tools.jackson.databind.exc.UnrecognizedPropertyException;
 
 import java.util.List;
@@ -36,6 +38,24 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ErrorResponse> handleConflitEtat(ConflitEtatException ex) {
         return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), "Action incompatible avec le statut de la fiche", ex.getMessage()));
+    }
+
+    /**
+     * Fichier refuse par Spring avant meme d'atteindre le service (limites
+     * spring.servlet.multipart.*) : 413 avec un message lisible au lieu d'une page d'erreur.
+     */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    public ResponseEntity<ErrorResponse> handleMaxUploadSize(MaxUploadSizeExceededException ex) {
+        return ResponseEntity.status(HttpStatus.CONTENT_TOO_LARGE).contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(HttpStatus.CONTENT_TOO_LARGE.value(), "Fichier trop volumineux",
+                        "Le fichier importe depasse la taille maximale de 10 Mo"));
+    }
+
+    @ExceptionHandler(MissingServletRequestPartException.class)
+    public ResponseEntity<ErrorResponse> handleMissingPart(MissingServletRequestPartException ex) {
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(HttpStatus.BAD_REQUEST.value(), "Requete invalide",
+                        "La partie \"" + ex.getRequestPartName() + "\" (fichier PDF) est obligatoire"));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)
