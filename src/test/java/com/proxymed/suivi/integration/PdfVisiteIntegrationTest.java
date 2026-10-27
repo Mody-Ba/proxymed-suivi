@@ -6,6 +6,7 @@ import com.proxymed.suivi.enums.RoleMedecin;
 import com.proxymed.suivi.enums.Sexe;
 import com.proxymed.suivi.repository.MedecinRepository;
 import com.proxymed.suivi.repository.PatientRepository;
+import com.proxymed.suivi.support.BadgeMedecinParDefaut;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
@@ -14,6 +15,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -33,6 +35,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(BadgeMedecinParDefaut.class)
 @Transactional
 class PdfVisiteIntegrationTest {
 

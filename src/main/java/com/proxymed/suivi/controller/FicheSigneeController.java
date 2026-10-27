@@ -15,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -46,6 +47,7 @@ public class FicheSigneeController {
     @ApiResponse(responseCode = "404", description = "Patient ou visite du QR code introuvable")
     @ApiResponse(responseCode = "409", description = "La visite a deja une fiche signee")
     @ApiResponse(responseCode = "422", description = "Aucun code QR trouve dans le PDF")
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @PostMapping(value = "/fiches-signees/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     @ResponseStatus(HttpStatus.CREATED)
     public FicheSigneeResponse importer(@RequestPart("fichier") MultipartFile fichier) {
@@ -55,6 +57,7 @@ public class FicheSigneeController {
     /**
      * Fiches signees du dossier du patient, de la visite la plus recente a la plus ancienne.
      */
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @GetMapping("/patients/{patientId}/fiches-signees")
     public List<FicheSigneeResponse> findByPatient(@PathVariable UUID patientId) {
         return ficheSigneeService.findByPatient(patientId).stream().map(ficheSigneeMapper::toResponse).toList();
@@ -63,6 +66,7 @@ public class FicheSigneeController {
     @ApiResponse(responseCode = "200", description = "Fiche signee de la visite, au format PDF",
             content = @Content(mediaType = MediaType.APPLICATION_PDF_VALUE,
                     schema = @Schema(type = "string", format = "binary")))
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @GetMapping(value = "/visites/{visiteId}/fiche-signee", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<Resource> telecharger(@PathVariable UUID visiteId) {
         FicheSigneeModel fiche = ficheSigneeService.telecharger(visiteId);

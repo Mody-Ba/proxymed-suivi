@@ -19,6 +19,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -39,6 +40,7 @@ public class VisiteSuiviController {
     private final VisiteSuiviService visiteSuiviService;
     private final VisiteSuiviMapper visiteSuiviMapper;
 
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @PostMapping("/patients/{patientId}/visites")
     @ResponseStatus(HttpStatus.CREATED)
     public VisiteSuiviResponse creer(@PathVariable UUID patientId, @Valid @RequestBody VisiteSuiviCreateRequest request) {
@@ -49,12 +51,14 @@ public class VisiteSuiviController {
     /**
      * Visites d'un patient, de la plus recente a la plus ancienne.
      */
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @GetMapping("/patients/{patientId}/visites")
     public List<VisiteSuiviSummaryResponse> findByPatient(@PathVariable UUID patientId) {
         return visiteSuiviService.findByPatient(patientId)
                 .stream().map(visiteSuiviMapper::toSummaryResponse).toList();
     }
 
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @GetMapping("/visites/{id}")
     public VisiteSuiviResponse findById(@PathVariable UUID id) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.findById(id));
@@ -63,6 +67,7 @@ public class VisiteSuiviController {
     /**
      * Fiches terminees en attente du visa du senior, de la plus ancienne a la plus recente.
      */
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @GetMapping("/visites/en-attente-visa")
     public List<VisiteEnAttenteVisaResponse> findEnAttenteVisa() {
         return visiteSuiviService.findEnAttenteVisa()
@@ -72,6 +77,7 @@ public class VisiteSuiviController {
     /**
      * Le medecin junior termine et signe la fiche (BROUILLON -> TERMINEE).
      */
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @PostMapping("/visites/{id}/terminer")
     public VisiteSuiviResponse terminer(@PathVariable UUID id) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.terminer(id));
@@ -80,11 +86,13 @@ public class VisiteSuiviController {
     /**
      * Visa du medecin senior (TERMINEE -> VISEE).
      */
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @PostMapping("/visites/{id}/viser")
     public VisiteSuiviResponse viser(@PathVariable UUID id) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.viser(id));
     }
 
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @PostMapping("/visites/{id}/signature-patient")
     public VisiteSuiviResponse signerPatient(@PathVariable UUID id, @Valid @RequestBody SignaturePatientRequest request) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.signerPatient(id, request.signataire()));
@@ -96,6 +104,7 @@ public class VisiteSuiviController {
     @ApiResponse(responseCode = "200", description = "Fiche de visite de suivi au format PDF",
             content = @Content(mediaType = MediaType.APPLICATION_PDF_VALUE,
                     schema = @Schema(type = "string", format = "binary")))
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @GetMapping(value = "/visites/{id}/pdf", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<Resource> telechargerPdf(@PathVariable UUID id) {
         Resource pdf = visiteSuiviService.genererPdf(id);
@@ -106,6 +115,7 @@ public class VisiteSuiviController {
                 .body(pdf);
     }
 
+    @PreAuthorize("hasAnyRole('MEDECIN_JUNIOR', 'MEDECIN_SENIOR')")
     @PutMapping("/visites/{id}")
     public VisiteSuiviResponse mettreAJour(@PathVariable UUID id, @Valid @RequestBody VisiteSuiviUpdateRequest request) {
         return visiteSuiviMapper.toResponse(visiteSuiviService.mettreAJour(id, visiteSuiviMapper.toModel(request)));

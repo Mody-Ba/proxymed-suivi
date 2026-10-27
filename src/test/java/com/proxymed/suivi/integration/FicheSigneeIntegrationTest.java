@@ -9,6 +9,7 @@ import com.proxymed.suivi.repository.FicheSigneeRepository;
 import com.proxymed.suivi.repository.MedecinRepository;
 import com.proxymed.suivi.repository.PatientRepository;
 import com.proxymed.suivi.repository.VisiteSuiviRepository;
+import com.proxymed.suivi.support.BadgeMedecinParDefaut;
 import com.proxymed.suivi.support.PdfDeTest;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -49,6 +51,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(BadgeMedecinParDefaut.class)
 @Transactional
 class FicheSigneeIntegrationTest {
 
