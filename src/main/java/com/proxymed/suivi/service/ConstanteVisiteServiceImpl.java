@@ -68,10 +68,7 @@ public class ConstanteVisiteServiceImpl implements ConstanteVisiteService {
         constanteVisiteRepository.delete(entity);
     }
 
-    /**
-     * La diastolique est obligatoire pour la tension arterielle (valeur porte la systolique)
-     * et interdite pour toutes les autres constantes.
-     */
+
     private void verifierValeurDiastolique(ConstanteVisiteModel model) {
         if (model.type() == TypeConstante.TA && model.valeurDiastolique() == null) {
             throw new RegleGestionException(

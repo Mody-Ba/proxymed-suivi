@@ -1,6 +1,8 @@
 package com.proxymed.suivi.service.mappers;
 
 import com.proxymed.suivi.entity.FicheSignee;
+import com.proxymed.suivi.entity.VisiteSuivi;
+import com.proxymed.suivi.repository.FicheSigneeResume;
 import com.proxymed.suivi.repository.VisiteSuiviRepository;
 import com.proxymed.suivi.service.model.FicheSigneeModel;
 import lombok.RequiredArgsConstructor;
@@ -33,14 +35,30 @@ public class FicheSigneeMapper {
     }
 
     public FicheSigneeModel toModel(FicheSignee entity) {
+        VisiteSuivi visite = entity.getVisite();
         return FicheSigneeModel.builder()
                 .id(entity.getId())
-                .visiteId(entity.getVisite().getId())
+                .visiteId(visite.getId())
+                .patientId(visite.getPatient().getId())
+                .numeroVisite(visite.getNumeroVisite())
                 .nomFichier(entity.getNomFichier())
                 .typeContenu(entity.getTypeContenu())
                 .tailleOctets(entity.getTailleOctets())
                 .dateImport(entity.getDateImport())
                 .contenu(entity.getContenu())
+                .build();
+    }
+
+    public FicheSigneeModel toModel(FicheSigneeResume resume) {
+        return FicheSigneeModel.builder()
+                .id(resume.getId())
+                .visiteId(resume.getVisiteId())
+                .patientId(resume.getPatientId())
+                .numeroVisite(resume.getNumeroVisite())
+                .nomFichier(resume.getNomFichier())
+                .typeContenu(resume.getTypeContenu())
+                .tailleOctets(resume.getTailleOctets())
+                .dateImport(resume.getDateImport())
                 .build();
     }
 }

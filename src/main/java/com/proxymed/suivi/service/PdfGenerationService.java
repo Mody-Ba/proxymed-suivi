@@ -36,12 +36,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.UUID;
 import java.util.stream.Collectors;
 
 /**
  * Genere le PDF de la Fiche 2 : template Thymeleaf -> XHTML -> openhtmltopdf, avec un QR code
- * qui encode uniquement l'UUID de la visite. Meme approche que le PdfGenerationService de
+ * qui encode le type de fiche, l'id du patient et l'id de la visite (cf. {@link GenerateurContenuQr}) :
+ * c'est lui qui permet de ranger automatiquement la fiche scannee a l'import. Meme approche que le PdfGenerationService de
  * PROXYMED 1. Simple mise en forme : aucune regle metier ici (les alertes et la grille
  * arrivent deja calculees dans le VisiteSuiviModel).
  */
@@ -52,11 +52,14 @@ public class PdfGenerationService {
     private static final int TAILLE_QR_CODE_PX = 300;
 
     private final ITemplateEngine templateEngine;
+    private final GenerateurContenuQr generateurContenuQr;
     private final ZoneId fuseauHoraire;
 
     public PdfGenerationService(ITemplateEngine templateEngine,
+                                GenerateurContenuQr generateurContenuQr,
                                 @Value("${proxymed.pdf.fuseau-horaire:Africa/Dakar}") ZoneId fuseauHoraire) {
         this.templateEngine = templateEngine;
+        this.generateurContenuQr = generateurContenuQr;
         this.fuseauHoraire = fuseauHoraire;
     }
 
@@ -71,7 +74,7 @@ public class PdfGenerationService {
     String remplirTemplate(VisiteSuiviModel visite) {
         Context context = new Context(Locale.FRENCH, Map.of(
                 "v", visite,
-                "qrCode", genererQrCodeBase64(visite.id()),
+                "qrCode", genererQrCodeBase64(generateurContenuQr.construire(visite)),
                 "fuseauHoraire", fuseauHoraire,
                 "grille", cellulesDeLaGrille(visite.constantes()),
                 "constantesEnAlerte", constantesEnAlerte(visite.alertes()),
@@ -81,16 +84,16 @@ public class PdfGenerationService {
         return templateEngine.process(TEMPLATE_FICHE_VISITE, context);
     }
 
-    String genererQrCodeBase64(UUID visiteId) {
+    String genererQrCodeBase64(String contenu) {
         try {
             BitMatrix matrice = new QRCodeWriter().encode(
-                    visiteId.toString(), BarcodeFormat.QR_CODE, TAILLE_QR_CODE_PX, TAILLE_QR_CODE_PX,
+                    contenu, BarcodeFormat.QR_CODE, TAILLE_QR_CODE_PX, TAILLE_QR_CODE_PX,
                     Map.of(EncodeHintType.ERROR_CORRECTION, ErrorCorrectionLevel.M, EncodeHintType.MARGIN, 1));
             ByteArrayOutputStream png = new ByteArrayOutputStream();
             MatrixToImageWriter.writeToStream(matrice, "PNG", png);
             return Base64.getEncoder().encodeToString(png.toByteArray());
         } catch (WriterException e) {
-            throw new IllegalStateException("Impossible de generer le QR code de la visite " + visiteId, e);
+            throw new IllegalStateException("Impossible de generer le QR code : " + contenu, e);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
         }
