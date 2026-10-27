@@ -2,10 +2,12 @@ package com.proxymed.suivi.integration;
 
 import com.proxymed.suivi.enums.Sexe;
 import com.proxymed.suivi.service.model.PatientRequest;
+import com.proxymed.suivi.support.BadgeMedecinParDefaut;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 import tools.jackson.databind.ObjectMapper;
@@ -23,6 +25,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(BadgeMedecinParDefaut.class)
 @Transactional
 class PatientIntegrationTest {
 
