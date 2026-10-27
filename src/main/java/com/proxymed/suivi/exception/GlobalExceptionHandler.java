@@ -40,6 +40,18 @@ public class GlobalExceptionHandler {
                 .body(new ErrorResponse(HttpStatus.CONFLICT.value(), "Action incompatible avec le statut de la fiche", ex.getMessage()));
     }
 
+    @ExceptionHandler(FicheSigneeExistanteException.class)
+    public ResponseEntity<ErrorResponse> handleFicheSigneeExistante(FicheSigneeExistanteException ex) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(HttpStatus.CONFLICT.value(), "Fiche signee deja importee", ex.getMessage()));
+    }
+
+    @ExceptionHandler(QrCodeIntrouvableException.class)
+    public ResponseEntity<ErrorResponse> handleQrCodeIntrouvable(QrCodeIntrouvableException ex) {
+        return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).contentType(MediaType.APPLICATION_JSON)
+                .body(new ErrorResponse(HttpStatus.UNPROCESSABLE_CONTENT.value(), "Code QR introuvable", ex.getMessage()));
+    }
+
     /**
      * Fichier refuse par Spring avant meme d'atteindre le service (limites
      * spring.servlet.multipart.*) : 413 avec un message lisible au lieu d'une page d'erreur.

@@ -29,3 +29,6 @@ databaseChangeLog:
   - include:
       file: db/changelogs/010-create-fiche-signee-table.sql
       relativeToChangelogFile: false
+  - include:
+      file: db/changelogs/011-unicite-fiche-signee-visite.sql
+      relativeToChangelogFile: false

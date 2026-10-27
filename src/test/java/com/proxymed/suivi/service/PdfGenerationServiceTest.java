@@ -73,7 +73,7 @@ class PdfGenerationServiceTest {
         resolver.setCharacterEncoding("UTF-8");
         SpringTemplateEngine templateEngine = new SpringTemplateEngine();
         templateEngine.setTemplateResolver(resolver);
-        pdfGenerationService = new PdfGenerationService(templateEngine, ZoneId.of("Africa/Dakar"));
+        pdfGenerationService = new PdfGenerationService(templateEngine, new GenerateurContenuQr(), ZoneId.of("Africa/Dakar"));
     }
 
     @Test
@@ -113,25 +113,26 @@ class PdfGenerationServiceTest {
     }
 
     @Test
-    void genererFicheVisite_qrCodeEncodeUniquementLUuid() throws Exception {
+    void genererFicheVisite_qrCodeEncodeLeTypeDeFicheLePatientEtLaVisite() throws Exception {
         VisiteSuiviModel visite = ficheComplete();
 
         byte[] pdf = lire(pdfGenerationService.genererFicheVisite(visite));
 
         try (PDDocument document = Loader.loadPDF(pdf)) {
             BufferedImage page = new PDFRenderer(document).renderImageWithDPI(0, 200);
-            assertThat(decoderQrCode(page)).isEqualTo(visite.id().toString());
+            assertThat(decoderQrCode(page)).isEqualTo("{\"type\":\"FICHE_2_SUIVI\",\"patientId\":\""
+                    + visite.patient().id() + "\",\"visiteId\":\"" + visite.id() + "\"}");
         }
     }
 
     @Test
-    void genererQrCodeBase64_produitUnPngDecodableContenantLUuid() throws Exception {
-        UUID id = UUID.randomUUID();
+    void genererQrCodeBase64_produitUnPngDecodableContenantLeTexte() throws Exception {
+        String texte = "{\"type\":\"FICHE_2_SUIVI\",\"visiteId\":\"" + UUID.randomUUID() + "\"}";
 
-        byte[] png = Base64.getDecoder().decode(pdfGenerationService.genererQrCodeBase64(id));
+        byte[] png = Base64.getDecoder().decode(pdfGenerationService.genererQrCodeBase64(texte));
 
         BufferedImage image = javax.imageio.ImageIO.read(new java.io.ByteArrayInputStream(png));
-        assertThat(decoderQrCode(image)).isEqualTo(id.toString());
+        assertThat(decoderQrCode(image)).isEqualTo(texte);
     }
 
     @Test
@@ -167,7 +168,7 @@ class PdfGenerationServiceTest {
                 .id(UUID.randomUUID())
                 .numeroVisite(1)
                 .statut(StatutVisite.BROUILLON)
-                .patient(PatientModel.builder().nomComplet("Awa Ndiaye").numeroDossierProxymed("PXM-2026-0001").build())
+                .patient(PatientModel.builder().id(UUID.randomUUID()).nomComplet("Awa Ndiaye").numeroDossierProxymed("PXM-2026-0001").build())
                 .build();
 
         byte[] pdf = lire(pdfGenerationService.genererFicheVisite(brouillon));
