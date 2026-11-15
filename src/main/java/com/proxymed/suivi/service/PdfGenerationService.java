@@ -11,6 +11,9 @@ import com.openhtmltopdf.pdfboxout.PdfRendererBuilder;
 import com.proxymed.suivi.service.model.AlerteModel;
 import com.proxymed.suivi.service.model.ConstanteVisiteModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
+import org.apache.pdfbox.io.IOUtils;
+import org.apache.pdfbox.io.RandomAccessReadBuffer;
+import org.apache.pdfbox.multipdf.PDFMergerUtility;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
@@ -23,6 +26,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.UncheckedIOException;
 import java.math.BigDecimal;
 import java.nio.file.Files;
@@ -69,6 +73,51 @@ public class PdfGenerationService {
      */
     public Resource genererFicheVisite(VisiteSuiviModel visite) {
         return convertirEnPdf(remplirTemplate(visite));
+    }
+
+    /**
+     * Un seul PDF pour plusieurs fiches, dans l'ordre de la liste : chaque fiche est rendue a part
+     * (meme template, meme QR), puis les documents sont mis bout a bout. Chaque fiche commence donc
+     * sur une nouvelle page. Meme Resource a usage unique (cf. PROXYMED 1, genererFichesCombinees).
+     */
+    public Resource genererFichesCombinees(List<VisiteSuiviModel> fiches) {
+        if (fiches.isEmpty()) {
+            throw new IllegalArgumentException("Aucune fiche a generer");
+        }
+        List<byte[]> pdfs = fiches.stream().map(fiche -> {
+            ByteArrayOutputStream pdf = new ByteArrayOutputStream();
+            rendre(remplirTemplate(fiche), pdf);
+            return pdf.toByteArray();
+        }).toList();
+        try {
+            var file = File.createTempFile("fiches-visite-", ".pdf");
+            try (var destination = new FileOutputStream(file)) {
+                PDFMergerUtility fusion = new PDFMergerUtility();
+                for (byte[] pdf : pdfs) {
+                    fusion.addSource(new RandomAccessReadBuffer(pdf));
+                }
+                fusion.setDestinationStream(destination);
+                fusion.mergeDocuments(IOUtils.createMemoryOnlyStreamCache());
+            } catch (IOException | RuntimeException e) {
+                file.delete();
+                throw e;
+            }
+            return new FichePdfTemporaire(file);
+        } catch (IOException e) {
+            throw new UncheckedIOException("Echec de l'ecriture du PDF des fiches", e);
+        }
+    }
+
+    private void rendre(String html, OutputStream pdf) {
+        PdfRendererBuilder builder = new PdfRendererBuilder();
+        builder.useFastMode();
+        builder.withHtmlContent(html, null);
+        builder.toStream(pdf);
+        try {
+            builder.run();
+        } catch (IOException e) {
+            throw new UncheckedIOException("Echec de la conversion HTML -> PDF de la fiche", e);
+        }
     }
 
     String remplirTemplate(VisiteSuiviModel visite) {

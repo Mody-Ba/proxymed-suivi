@@ -22,6 +22,12 @@ public interface VisiteSuiviService {
     VisiteSuiviModel creerBrouillon(VisiteSuiviModel intention);
 
     /**
+     * Visite vierge (BROUILLON, sans medecin junior ni senior, sans type de visite) pour un
+     * patient existant : creee par l'admin a l'impression de la fiche, completee ensuite.
+     */
+    VisiteSuiviModel creerVisiteVierge(UUID patientId);
+
+    /**
      * Mise a jour partielle : seuls les champs non nuls de l'intention sont appliques.
      */
     VisiteSuiviModel mettreAJour(UUID id, VisiteSuiviModel intention);

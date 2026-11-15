@@ -16,6 +16,7 @@ import com.proxymed.suivi.service.model.AlerteModel;
 import com.proxymed.suivi.service.model.ConstanteVisiteModel;
 import com.proxymed.suivi.service.model.LigneGrilleConstantesModel;
 import com.proxymed.suivi.service.model.MedecinModel;
+import com.proxymed.suivi.service.model.PatientModel;
 import com.proxymed.suivi.service.model.TraitementVisiteModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import lombok.RequiredArgsConstructor;
@@ -93,6 +94,20 @@ public class VisiteSuiviServiceImpl implements VisiteSuiviService {
                 .build();
         VisiteSuivi entity = visiteSuiviMapper.toNewEntity(avecDefauts);
         return toModel(visiteSuiviRepository.save(entity));
+    }
+
+    @Override
+    public VisiteSuiviModel creerVisiteVierge(UUID patientId) {
+        patientService.findById(patientId);
+        Instant maintenant = Instant.now();
+        VisiteSuiviModel vierge = VisiteSuiviModel.builder()
+                .patient(PatientModel.builder().id(patientId).build())
+                .numeroVisite(prochainNumeroVisite(patientId))
+                .statut(StatutVisite.BROUILLON)
+                .dateCreation(maintenant)
+                .dateMiseAJour(maintenant)
+                .build();
+        return toModel(visiteSuiviRepository.save(visiteSuiviMapper.toNewEntity(vierge)));
     }
 
     @Override

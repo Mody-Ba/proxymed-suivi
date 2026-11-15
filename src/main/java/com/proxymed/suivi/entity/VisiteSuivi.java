@@ -81,12 +81,14 @@ public class VisiteSuivi {
     @Column(name = "adresse_visite")
     private String adresseVisite;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "medecin_junior_id", nullable = false)
+    /** Vide sur une visite vierge imprimee par l'admin, renseigne ensuite par mise a jour. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "medecin_junior_id")
     private Medecin medecinJunior;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "medecin_senior_id", nullable = false)
+    /** Vide sur une visite vierge imprimee par l'admin, renseigne ensuite par mise a jour. */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "medecin_senior_id")
     private Medecin medecinSenior;
 
     @Column(name = "contact_senior")

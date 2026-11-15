@@ -4,10 +4,12 @@ import com.proxymed.suivi.enums.CreneauMesure;
 import com.proxymed.suivi.enums.DecisionVisite;
 import com.proxymed.suivi.enums.EtatGeneral;
 import com.proxymed.suivi.enums.ObservanceTraitement;
+import com.proxymed.suivi.enums.RoleMedecin;
 import com.proxymed.suivi.enums.SituationSociale;
 import com.proxymed.suivi.enums.TypeConstante;
 import com.proxymed.suivi.enums.TypeVisite;
 import com.proxymed.suivi.service.model.ConstanteVisiteModel;
+import com.proxymed.suivi.service.model.MedecinModel;
 import com.proxymed.suivi.service.model.VisiteSuiviModel;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +34,7 @@ class ControleFicheTermineeTest {
                 VisiteSuiviModel.builder().constantes(List.of()).alerteDeclenchee(false).build());
 
         assertThat(manquements).extracting(m -> m.substring(0, m.indexOf(" :"))).containsExactly(
-                "dateVisite", "heureArrivee", "typeVisite", "contactSenior", "heureDepart", "etatGeneral",
+                "medecinJunior", "medecinSenior", "dateVisite", "heureArrivee", "typeVisite", "contactSenior", "heureDepart", "etatGeneral",
                 "constantes", "observanceTraitement", "situationSociale", "decision", "resumeClinique");
     }
 
@@ -82,8 +84,19 @@ class ControleFicheTermineeTest {
                 .signalementDass(true).heureContactDass(LocalTime.of(10, 30)).build())).isEmpty();
     }
 
+    @Test
+    void medecinsNonAffectes_ficheViergeNePeutPasEtreTerminee() {
+        assertThat(ControleFicheTerminee.manquements(ficheComplete().medecinJunior(null).medecinSenior(null).build()))
+                .extracting(m -> m.substring(0, m.indexOf(" :")))
+                .containsExactly("medecinJunior", "medecinSenior");
+        assertThat(ControleFicheTerminee.manquements(ficheComplete().medecinSenior(null).build()))
+                .singleElement().asString().startsWith("medecinSenior");
+    }
+
     private VisiteSuiviModel.VisiteSuiviModelBuilder ficheComplete() {
         return VisiteSuiviModel.builder()
+                .medecinJunior(MedecinModel.builder().id(1L).role(RoleMedecin.JUNIOR).build())
+                .medecinSenior(MedecinModel.builder().id(2L).role(RoleMedecin.SENIOR).build())
                 .dateVisite(LocalDate.of(2026, 10, 5))
                 .heureArrivee(LocalTime.of(9, 0))
                 .heureDepart(LocalTime.of(11, 0))
