@@ -100,8 +100,8 @@ public class VisiteSuiviMapper {
                 .heureArrivee(model.heureArrivee())
                 .heureDepart(model.heureDepart())
                 .adresseVisite(model.adresseVisite())
-                .medecinJunior(medecinMapper.toResponse(model.medecinJunior()))
-                .medecinSenior(medecinMapper.toResponse(model.medecinSenior()))
+                .medecinJunior(model.medecinJunior() != null ? medecinMapper.toResponse(model.medecinJunior()) : null)
+                .medecinSenior(model.medecinSenior() != null ? medecinMapper.toResponse(model.medecinSenior()) : null)
                 .contactSenior(model.contactSenior())
                 .contactSeniorJoignable(model.contactSeniorJoignable())
                 .typeVisite(model.typeVisite())
@@ -160,9 +160,9 @@ public class VisiteSuiviMapper {
                 .dateVisite(model.dateVisite())
                 .typeVisite(model.typeVisite())
                 .statut(model.statut())
-                .medecinJuniorId(model.medecinJunior().id())
+                .medecinJuniorId(model.medecinJunior() != null ? model.medecinJunior().id() : null)
                 .medecinJuniorNomComplet(nomComplet(model.medecinJunior()))
-                .medecinSeniorId(model.medecinSenior().id())
+                .medecinSeniorId(model.medecinSenior() != null ? model.medecinSenior().id() : null)
                 .medecinSeniorNomComplet(nomComplet(model.medecinSenior()))
                 .build();
     }
@@ -175,9 +175,9 @@ public class VisiteSuiviMapper {
                 .patientId(model.patient().id())
                 .patientNomComplet(model.patient().nomComplet())
                 .numeroDossierProxymed(model.patient().numeroDossierProxymed())
-                .medecinJuniorId(model.medecinJunior().id())
+                .medecinJuniorId(model.medecinJunior() != null ? model.medecinJunior().id() : null)
                 .medecinJuniorNomComplet(nomComplet(model.medecinJunior()))
-                .medecinSeniorId(model.medecinSenior().id())
+                .medecinSeniorId(model.medecinSenior() != null ? model.medecinSenior().id() : null)
                 .medecinSeniorNomComplet(nomComplet(model.medecinSenior()))
                 .decision(model.decision())
                 .alerteDeclenchee(Boolean.TRUE.equals(model.alerteDeclenchee()))
@@ -191,7 +191,8 @@ public class VisiteSuiviMapper {
         return id != null ? MedecinModel.builder().id(id).build() : null;
     }
 
+    /** Null pour une visite vierge, pas encore attribuee a un medecin. */
     private String nomComplet(MedecinModel medecin) {
-        return medecin.prenom() + " " + medecin.nom();
+        return medecin != null ? medecin.prenom() + " " + medecin.nom() : null;
     }
 }

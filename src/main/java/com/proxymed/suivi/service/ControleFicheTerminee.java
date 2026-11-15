@@ -24,7 +24,10 @@ final class ControleFicheTerminee {
     static List<String> manquements(VisiteSuiviModel visite) {
         List<String> manquements = new ArrayList<>();
 
-        // Identification complete (le patient et les deux medecins sont toujours renseignes)
+        // Identification complete. Le patient est toujours renseigne ; les medecins peuvent manquer
+        // sur une fiche vierge imprimee en lot (renseignes plus tard), leur role est controle a l'affectation.
+        exiger(manquements, visite.medecinJunior(), "medecinJunior : le medecin junior est obligatoire");
+        exiger(manquements, visite.medecinSenior(), "medecinSenior : le medecin senior est obligatoire");
         exiger(manquements, visite.dateVisite(), "dateVisite : la date de la visite est obligatoire");
         exiger(manquements, visite.heureArrivee(), "heureArrivee : l'heure d'arrivee est obligatoire");
         exiger(manquements, visite.typeVisite(), "typeVisite : le type de visite est obligatoire");

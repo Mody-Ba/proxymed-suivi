@@ -14,6 +14,15 @@ public interface PatientService {
     PatientModel create(PatientModel model);
 
     /**
+     * Patients portant ces numeros de dossier PROXYMED, dans l'ordre de la liste. Tout ou rien :
+     * si un seul numero est inconnu, aucune donnee n'est renvoyee.
+     *
+     * @throws com.proxymed.suivi.exception.ResourceNotFoundException avec, en details, chaque
+     *                                                               numero introuvable
+     */
+    List<PatientModel> findByNumerosDossierProxymed(List<String> numerosDossierProxymed);
+
+    /**
      * Renseigne l'age (derive de dateNaissance) sur un PatientModel produit hors de ce service,
      * par exemple imbrique dans une visite. Point unique de calcul de l'age.
      */

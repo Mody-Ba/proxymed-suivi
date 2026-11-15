@@ -13,6 +13,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.Period;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.UUID;
 
 @Service
@@ -41,6 +44,19 @@ public class PatientServiceImpl implements PatientService {
         }
         Patient patient = patientMapper.toEntity(model);
         return toModelAvecAge(patientRepository.save(patient));
+    }
+
+    @Override
+    public List<PatientModel> findByNumerosDossierProxymed(List<String> numerosDossierProxymed) {
+        Map<String, Patient> trouves = patientRepository.findByNumeroDossierProxymedIn(numerosDossierProxymed).stream()
+                .collect(Collectors.toMap(Patient::getNumeroDossierProxymed, Function.identity()));
+        List<String> introuvables = numerosDossierProxymed.stream().filter(n -> !trouves.containsKey(n)).toList();
+        if (!introuvables.isEmpty()) {
+            throw new ResourceNotFoundException(introuvables.size()
+                    + " numero(s) de dossier PROXYMED introuvable(s) dans la Fiche 2 : aucune fiche n'a ete creee",
+                    introuvables);
+        }
+        return numerosDossierProxymed.stream().map(n -> toModelAvecAge(trouves.get(n))).toList();
     }
 
     /**
